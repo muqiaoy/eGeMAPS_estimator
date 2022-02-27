@@ -1,0 +1,9 @@
+numpy
+soundfile
+librosa
+pandas
+onnxruntime
+torch
+torchaudio
+hydra_core
+julius

@@ -1,0 +1,21 @@
+
+# General arguments
+cpu: False
+modelPath: "pretrained/nsnet2-20ms-baseline.onnx"
+savePath: "exp/NSNet2"
+seed: 2
+
+
+# Model related
+model: NSNet2
+cfg: 
+    winlen: 0.02
+    hopfrac: 0.5
+    fs: 16000
+    mingain: -80
+    feattype: "LogPow"
+    nfft: 320
+    
+    
+    
+    
