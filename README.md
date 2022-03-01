@@ -21,7 +21,7 @@ pip install -r requirements.txt
 ## Usage
 1. Train the eGeMAPS estimator.
 
-Generating the eGeMAPS feature for the first time could be slow.
+    Generating the eGeMAPS feature for the first time could be slow.
 ```
 python train_est.py --train_config conf/estimator.yaml 
 ```
