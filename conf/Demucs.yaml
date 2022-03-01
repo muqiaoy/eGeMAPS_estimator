@@ -35,7 +35,7 @@ segment: 30
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
-num_train_files: 10
+num_train_files:
 
 # Data augmentation
 remix: false   # remix noise and clean
@@ -47,7 +47,7 @@ revecho: 0  # add reverb like augment
 
 # Training related
 batch_size: 2
-epochs: 5
+epochs: 50
 num_workers: 4
 optim: Adam
 loss: l1
