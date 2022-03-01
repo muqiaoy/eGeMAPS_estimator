@@ -6,13 +6,18 @@ import onnxruntime as ort
 import torch
 import scipy
 import scipy.signal
+from torch import nn
+import onnx
+from onnx2pytorch import ConvertModel
+
 
 from . import featurelib
 
-class NSNet2(object):
+class NSNet2(nn.Module):
     """NSNet2 enhancer class."""
 
     def __init__(self, modelfile, cfg=None):
+        super().__init__()
         """Instantiate NSnet2 given a trained model path."""
         self.cfg = cfg
         self.frameShift = float(self.cfg['winlen'])* float(self.cfg["hopfrac"])
@@ -26,7 +31,8 @@ class NSNet2(object):
         self.N_hop = int(self.N_fft * float(cfg["hopfrac"]))
         
         """load onnx model"""
-        self.ort = ort.InferenceSession(modelfile)
+        # self.ort = ort.InferenceSession(modelfile)
+        self.model = ConvertModel(onnx.load(modelfile))
         self.dtype = np.float32
         self.win = np.sqrt(scipy.signal.windows.hann(self.N_win, sym=False))
         self.win_buf = torch.from_numpy(self.win).float()        
@@ -40,8 +46,9 @@ class NSNet2(object):
 
     def enhance(self, x):
         """Obtain the estimated filter"""
-        onnx_inputs = {self.ort.get_inputs()[0].name: x.astype(self.dtype)}
-        out = self.ort.run(None, onnx_inputs)[0][0]
+        # onnx_inputs = {self.ort.get_inputs()[0].name: x.astype(self.dtype)}
+        # out = self.ort.run(None, onnx_inputs)[0][0]
+        out = self.model(x)
         return out
 
     def enhance_48khz(self, x):
@@ -66,19 +73,23 @@ class NSNet2(object):
         sig = torch.nn.functional.conv_transpose1d(x_framed.permute(0,2,1), weight=torch.diag(self.awin).unsqueeze(1), stride=self.N_hop).squeeze(1).contiguous()
         return sig[0]
 
-    def __call__(self, sigIn, inFs):
+    def __call__(self, sigIn, inFs=16000):
         """Enhance a single Audio signal."""
         assert inFs in (16000, 48000), "Inconsistent sampling rate!"
 
         if inFs == 48000:
-            return self.enhance_48khz(sigIn)
+            # return self.enhance_48khz(sigIn)
+            raise NotImplementedError
 
-        inputSpec = featurelib.calcSpec(sigIn, self.cfg)
+        sigIn = np.squeeze(sigIn, axis=0)
+        inputSpec = featurelib.calcSpec(sigIn.cpu().numpy(), self.cfg)
         inputFeature = featurelib.calcFeat(inputSpec, self.cfg)
         # shape: [batch x time x freq]
         inputFeature = np.expand_dims(np.transpose(inputFeature), axis=0)
 
         # Obtain network output
+        inputFeature = torch.from_numpy(inputFeature.astype(np.float32)).cuda()
+        print(inputFeature.dtype)
         out = self.enhance(inputFeature)
         
         # limit suppression gain

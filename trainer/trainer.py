@@ -18,7 +18,7 @@ import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
-from data import augment, distrib
+from dataset import augment, distrib
 from .enhance import enhance
 from .evaluate import evaluate
 from .stft_loss import MultiResolutionSTFTLoss
@@ -28,12 +28,15 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
-    def __init__(self, data, model, optimizer, args):
+    def __init__(self, data, model, estimator, optimizer, args):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
         self.model = model
         self.dmodel = distrib.wrap(model)
+        self.estimator = estimator
+        if self.estimator is not None:
+            self.estimator.eval()
         self.optimizer = optimizer
 
         # data augment
@@ -58,10 +61,10 @@ class Trainer(object):
         self.eval_every = args.eval_every
         self.checkpoint = args.checkpoint
         if self.checkpoint:
-            self.checkpoint_file = Path(args.checkpoint_file)
-            self.best_file = Path(args.best_file)
+            self.checkpoint_file = Path(os.path.join(args.savePath, args.checkpoint_file))
+            self.best_file = Path(os.path.join(args.savePath, args.best_file))
             logger.debug("Checkpoint will be saved to %s", self.checkpoint_file.resolve())
-        self.history_file = args.history_file
+        self.history_file = os.path.join(args.savePath, args.history_file)
 
         self.best_state = None
         self.restart = args.restart
@@ -141,8 +144,8 @@ class Trainer(object):
             logger.info("Training...")
             train_loss = self._run_one_epoch(epoch)
             logger.info(
-                bold(f'Train Summary | End of Epoch {epoch + 1} | '
-                     f'Time {time.time() - start:.2f}s | Train Loss {train_loss:.5f}'))
+                    f'Train Summary | End of Epoch {epoch + 1} | '
+                    f'Time {time.time() - start:.2f}s | Train Loss {train_loss:.5f}')
 
             if self.cv_loader:
                 # Cross validation
@@ -152,16 +155,16 @@ class Trainer(object):
                 with torch.no_grad():
                     valid_loss = self._run_one_epoch(epoch, cross_valid=True)
                 logger.info(
-                    bold(f'Valid Summary | End of Epoch {epoch + 1} | '
-                         f'Time {time.time() - start:.2f}s | Valid Loss {valid_loss:.5f}'))
+                        f'Valid Summary | End of Epoch {epoch + 1} | '
+                        f'Time {time.time() - start:.2f}s | Valid Loss {valid_loss:.5f}')
             else:
                 valid_loss = 0
 
             best_loss = min(pull_metric(self.history, 'valid') + [valid_loss])
-            metrics = {'train': train_loss, 'valid': valid_loss, 'best': best_loss}
+            metrics = {'epoch': epoch, 'train': train_loss, 'valid': valid_loss, 'best': best_loss}
             # Save the best model
             if valid_loss == best_loss:
-                logger.info(bold('New best valid loss %.4f'), valid_loss)
+                logger.info('New best valid loss %.4f', valid_loss)
                 self.best_state = copy_state(self.model.state_dict())
 
             # evaluate and enhance samples every 'eval_every' argument number of epochs
@@ -177,13 +180,13 @@ class Trainer(object):
                 metrics.update({'pesq': pesq, 'stoi': stoi})
 
                 # enhance some samples
-                logger.info('Enhance and save samples...')
-                enhance(self.args, self.model, self.samples_dir)
+                # logger.info('Enhance and save samples...')
+                # enhance(self.args, self.model, self.samples_dir)
 
             self.history.append(metrics)
-            info = " | ".join(f"{k.capitalize()} {v:.5f}" for k, v in metrics.items())
+            info = " | ".join(f"{k.capitalize()} {v:.5f}" for k, v in metrics.items() if k != 'epoch')
             logger.info('-' * 70)
-            logger.info(bold(f"Overall Summary | Epoch {epoch + 1} | {info}"))
+            logger.info(f"Overall Summary | Epoch {epoch + 1} | {info}")
 
             if distrib.rank == 0:
                 json.dump(self.history, open(self.history_file, "w"), indent=2)
@@ -203,7 +206,9 @@ class Trainer(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
         for i, data in enumerate(logprog):
-            noisy, clean = [x.to(self.device) for x in data]
+            data = [x.to(self.device) for x in data]
+            noisy = data[0]
+            clean = data[1]
             if not cross_valid:
                 sources = torch.stack([noisy - clean, clean])
                 sources = self.augment(sources)
@@ -224,6 +229,12 @@ class Trainer(object):
                 if self.args.stft_loss:
                     sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
                     loss += sc_loss + mag_loss
+                
+                if self.estimator is not None:
+                    egemaps = data[2]
+                    estimated_egemaps = self.estimator(estimate)
+                    egemaps_loss = F.mse_loss(egemaps, estimated_egemaps)
+                    loss += self.args.egemaps_factor * egemaps_loss
 
                 # optimize model in training mode
                 if not cross_valid:

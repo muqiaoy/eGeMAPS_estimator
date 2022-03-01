@@ -1,5 +1,10 @@
 # experiments related
 exp/
+s3prl/
+egemaps_functionals/
+
+# custom scripts
+misc/
 
 
 # Byte-compiled / optimized / DLL files

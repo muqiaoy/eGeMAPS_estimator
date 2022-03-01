@@ -19,8 +19,8 @@ import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir) 
-from data.dataset import NoisyCleanSet
-from data import distrib
+from dataset.dataset import NoisyCleanSet
+from dataset import distrib
 from .enhance import get_estimate
 from .utils import bold, LogProgress
 
@@ -80,7 +80,7 @@ def evaluate(args, model=None, data_loader=None):
 
     metrics = [total_pesq, total_stoi]
     pesq, stoi = distrib.average([m/total_cnt for m in metrics], total_cnt)
-    logger.info(bold(f'Test set performance:PESQ={pesq}, STOI={stoi}.'))
+    logger.info(f'Test set performance:PESQ={pesq}, STOI={stoi}.')
     return pesq, stoi
 
 

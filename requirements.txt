@@ -9,3 +9,6 @@ hydra_core
 julius
 pesq
 pystoi
+onnx
+onnx2pytorch
+opensmile

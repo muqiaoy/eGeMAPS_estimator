@@ -2,6 +2,7 @@
 # General arguments
 cpu: False
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
+estimatorPath: "exp/estimator/best.th"
 savePath: "exp/Demucs"
 seed: 2
 
@@ -26,11 +27,15 @@ demucs:
 
 # Data related
 dataPath: "/data-ssd/Datasets/DNS-Challenge/datasets"
+trainPath: "synthesized"
+validPath: "synthesized_valid"
+testPath: "test_set/synthetic/no_reverb"
 fs: 16000
-segment: 4
+segment: 30
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
+num_train_files: 10
 
 # Data augmentation
 remix: false   # remix noise and clean
@@ -41,8 +46,8 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 32
-epochs: 50
+batch_size: 2
+epochs: 5
 num_workers: 4
 optim: Adam
 loss: l1
@@ -51,6 +56,10 @@ beta2: 0.999
 stft_loss: False
 stft_sc_factor: .5
 stft_mag_factor: .5
+
+# Egemaps stuff
+egemaps_factor: 1.
+egemaps_train_path: egemaps_functionals/train.npy
 
 
 # Logging and printing, and does not impact training
