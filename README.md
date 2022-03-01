@@ -26,7 +26,7 @@ pip install -r requirements.txt
     python train_est.py --train_config conf/estimator.yaml 
     ```
 
-2. Finetinue the enhancement model (only support Demucs so far).
+2. Finetune the enhancement model (only support Demucs so far).
     ```
     python train.py --train_config conf/Demucs.yaml
     ```
