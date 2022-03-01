@@ -22,11 +22,11 @@ pip install -r requirements.txt
 1. Train the eGeMAPS estimator.
 
     Generating the eGeMAPS feature for the first time could be slow.
-```
-python train_est.py --train_config conf/estimator.yaml 
-```
+    ```
+    python train_est.py --train_config conf/estimator.yaml 
+    ```
 
 2. Finetinue the enhancement model (only support Demucs so far).
-```
-python train.py --train_config conf/Demucs.yaml
-```
+    ```
+    python train.py --train_config conf/Demucs.yaml
+    ```
