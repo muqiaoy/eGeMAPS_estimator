@@ -60,6 +60,7 @@ stft_mag_factor: .5
 # Egemaps stuff
 egemaps_factor: 1.
 egemaps_train_path: egemaps_functionals/train.npy
+egemaps_valid_path: egemaps_functionals/valid.npy
 
 
 # Logging and printing, and does not impact training

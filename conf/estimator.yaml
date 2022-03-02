@@ -30,7 +30,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 2
+batch_size: 32
 epochs: 50
 num_workers: 4
 optim: Adam

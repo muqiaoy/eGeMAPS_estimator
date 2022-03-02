@@ -83,7 +83,7 @@ def main(args):
     print("Total number of train files: %s" % len(tr_dataset))
     cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
     cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs)
+    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
