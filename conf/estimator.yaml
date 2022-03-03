@@ -34,8 +34,8 @@ batch_size: 32
 epochs: 50
 num_workers: 4
 optim: Adam
-loss: l1
-lr: 3.0e-4
+loss: l2
+lr: 1.0e-3
 beta2: 0.999
 stft_loss: False
 stft_sc_factor: .5

@@ -21,40 +21,41 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 from dataset.audioset import Audioset, find_audio_files
 from dataset import distrib
+from . import load_pretrained
 
 from .utils import LogProgress
 
 logger = logging.getLogger(__name__)
 
 
-# def add_flags(parser):
-#     """
-#     Add the flags for the argument parser that are related to model loading and evaluation"
-#     """
-#     pretrained.add_model_flags(parser)
-#     parser.add_argument('--device', default="cpu")
-#     parser.add_argument('--dry', type=float, default=0,
-#                         help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
-#     parser.add_argument('--num_workers', type=int, default=10)
-#     parser.add_argument('--streaming', action="store_true",
-#                         help="true streaming evaluation for Demucs")
+def add_flags(parser):
+    """
+    Add the flags for the argument parser that are related to model loading and evaluation"
+    """
+    load_pretrained.add_model_flags(parser)
+    parser.add_argument('--device', default="cpu")
+    parser.add_argument('--dry', type=float, default=0,
+                        help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
+    parser.add_argument('--num_workers', type=int, default=10)
+    parser.add_argument('--streaming', action="store_true",
+                        help="true streaming evaluation for Demucs")
 
 
-# parser = argparse.ArgumentParser(
-#         'denoiser.enhance',
-#         description="Speech enhancement using Demucs - Generate enhanced files")
-# add_flags(parser)
-# parser.add_argument("--out_dir", type=str, default="enhanced",
-#                     help="directory putting enhanced wav files")
-# parser.add_argument("--batch_size", default=1, type=int, help="batch size")
-# parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG,
-#                     default=logging.INFO, help="more loggging")
+parser = argparse.ArgumentParser(
+        'denoiser.enhance',
+        description="Speech enhancement using Demucs - Generate enhanced files")
+add_flags(parser)
+parser.add_argument("--out_dir", type=str, default="enhanced",
+                    help="directory putting enhanced wav files")
+parser.add_argument("--batch_size", default=1, type=int, help="batch size")
+parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG,
+                    default=logging.INFO, help="more loggging")
 
-# group = parser.add_mutually_exclusive_group()
-# group.add_argument("--noisy_dir", type=str, default=None,
-#                    help="directory including noisy wav files")
-# group.add_argument("--noisy_json", type=str, default=None,
-#                    help="json file including noisy wav files")
+group = parser.add_mutually_exclusive_group()
+group.add_argument("--noisy_dir", type=str, default=None,
+                   help="directory including noisy wav files")
+group.add_argument("--noisy_json", type=str, default=None,
+                   help="json file including noisy wav files")
 
 
 def get_estimate(model, noisy, args):
@@ -109,7 +110,7 @@ def _estimate_and_save(model, noisy_signals, filenames, out_dir, args):
 def enhance(args, model=None, local_out_dir=None):
     # Load model
     if not model:
-        raise NotImplementedError
+        model = load_pretrained.get_model(args).to(args.device)
     model.eval()
     if local_out_dir:
         out_dir = local_out_dir
@@ -148,9 +149,8 @@ def enhance(args, model=None, local_out_dir=None):
 
 
 if __name__ == "__main__":
-    raise NotImplementedError
 
-    # args = parser.parse_args()
-    # logging.basicConfig(stream=sys.stderr, level=args.verbose)
-    # logger.debug(args)
-    # enhance(args, local_out_dir=args.out_dir)
+    args = parser.parse_args()
+    logging.basicConfig(stream=sys.stderr, level=args.verbose)
+    logger.debug(args)
+    enhance(args, local_out_dir=args.out_dir)
