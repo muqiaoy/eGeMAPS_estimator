@@ -142,8 +142,7 @@ class Trainer(object):
             start = time.time()
             logger.info('-' * 70)
             logger.info("Training...")
-            train_loss = 1.
-            # train_loss = self._run_one_epoch(epoch)
+            train_loss = self._run_one_epoch(epoch)
             logger.info(
                     f'Train Summary | End of Epoch {epoch + 1} | '
                     f'Time {time.time() - start:.2f}s | Train Loss {train_loss:.5f}')
