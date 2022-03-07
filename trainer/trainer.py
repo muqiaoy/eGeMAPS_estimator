@@ -35,8 +35,8 @@ class Trainer(object):
         self.model = model
         self.dmodel = distrib.wrap(model)
         self.estimator = estimator
-        if self.estimator is not None:
-            self.estimator.eval()
+        # if self.estimator is not None:
+        #     self.estimator.eval()
         self.optimizer = optimizer
 
         # data augment
@@ -139,6 +139,7 @@ class Trainer(object):
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
             self.model.train()
+            self.estimator.train()
             start = time.time()
             logger.info('-' * 70)
             logger.info("Training...")
@@ -152,6 +153,7 @@ class Trainer(object):
                 logger.info('-' * 70)
                 logger.info('Cross validation...')
                 self.model.eval()
+                self.estimator.eval()
                 with torch.no_grad():
                     valid_loss = self._run_one_epoch(epoch, cross_valid=True)
                 logger.info(
@@ -214,7 +216,7 @@ class Trainer(object):
                 sources = self.augment(sources)
                 noise, clean = sources
                 noisy = noise + clean
-            estimate = self.dmodel(noisy)
+            estimate, encoded_out = self.dmodel(noisy)
             # apply a loss function after each layer
             with torch.autograd.set_detect_anomaly(True):
                 if self.args.loss == 'l1':
@@ -232,8 +234,14 @@ class Trainer(object):
                 
                 if self.estimator is not None:
                     egemaps = data[2]
-                    estimated_egemaps = self.estimator(estimate)
+                    # estimated_egemaps = self.estimator(estimate)
+                    # encoded_out = encoded_out.mean(dim=1)
+                    estimated_egemaps = self.estimator(encoded_out)
+                    # print(self.estimator.state_dict().keys())
                     egemaps_loss = F.mse_loss(egemaps, estimated_egemaps)
+                    print("*****")
+                    print(egemaps_loss)
+                    print(loss)
                     loss += self.args.egemaps_factor * egemaps_loss
 
                 # optimize model in training mode

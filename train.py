@@ -17,6 +17,7 @@ import shutil
 import opensmile
 
 import torch
+import torch.nn as nn
 
 from model import *
 from model.egemaps_estimator import Egemaps_estimator
@@ -53,8 +54,13 @@ def main(args):
         feature_level=opensmile.FeatureLevel.Functionals)
 
     if args.model == 'NSNet2':
-        raise NotImplementedError
+        # raise NotImplementedError
         model = NSNet2(modelfile=args.modelPath, cfg=args.cfg)
+        print(model.model)
+        print(type(model.model.Shape_21))
+        for n, v in model.state_dict().items():
+            print(n)
+            print(v.shape)
         logging.info("Loaded checkpoint from %s" % args.modelPath)
     elif args.model == 'Demucs':
         model = Demucs(**args.demucs, sample_rate=args.fs)
@@ -100,9 +106,18 @@ def main(args):
         model.cuda()
         if estimator is not None:
             estimator.cuda()
+        else:
+            estimator = Egemaps_estimator().cuda()
+            # estimator = nn.Sequential(
+            #     nn.Linear(1874, 1024),
+            #     nn.ReLU(),
+            #     nn.Linear(1024, 256),
+            #     nn.ReLU(),
+            #     nn.Linear(256, 88)
+            #     ).cuda()
 
     if args.optim == "Adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
+        optimizer = torch.optim.Adam(list(model.parameters()) + list(estimator.parameters()), lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
         

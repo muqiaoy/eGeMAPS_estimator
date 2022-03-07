@@ -2,7 +2,7 @@
 # General arguments
 cpu: False
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
-estimatorPath: "exp/estimator/best.th"
+estimatorPath:
 savePath: "exp/Demucs"
 seed: 2
 
@@ -26,7 +26,7 @@ demucs:
 
 
 # Data related
-dataPath: "/data-ssd/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
@@ -46,19 +46,19 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 2
+batch_size: 8
 epochs: 10
 num_workers: 4
 optim: Adam
-loss: l1
-lr: 3.0e-4
+loss: l2
+lr: 1.0e-4
 beta2: 0.999
 stft_loss: False
 stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff
-egemaps_factor: 1.
+egemaps_factor: .3
 egemaps_train_path: egemaps_functionals/train.npy
 egemaps_valid_path: egemaps_functionals/valid.npy
 
@@ -87,6 +87,6 @@ save_again: false  # if true, only load checkpoint and save again, useful to ree
 
 # Evaluation stuff
 pesq: True # compute pesq?
-eval_every: 10  # compute test metrics every so epochs
+eval_every: 1  # compute test metrics every so epochs
 dry: 0.  # dry/wet knob value at eval
 streaming: False  # use streaming evaluation for Demucs

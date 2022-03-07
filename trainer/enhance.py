@@ -64,7 +64,7 @@ def get_estimate(model, noisy, args):
         raise NotImplementedError
     else:
         with torch.no_grad():
-            estimate = model(noisy)
+            estimate, _ = model(noisy)
             estimate = (1 - args.dry) * estimate + args.dry * noisy
     return estimate
 
@@ -73,7 +73,7 @@ def save_wavs(estimates, noisy_sigs, filenames, out_dir, sr=16_000):
     # Write result
     for estimate, noisy, filename in zip(estimates, noisy_sigs, filenames):
         filename = os.path.join(out_dir, os.path.basename(filename).rsplit(".", 1)[0])
-        write(noisy, filename + "_noisy.wav", sr=sr)
+        # write(noisy, filename + "_noisy.wav", sr=sr)
         write(estimate, filename + "_enhanced.wav", sr=sr)
 
 
