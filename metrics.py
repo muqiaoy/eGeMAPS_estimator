@@ -29,7 +29,7 @@ enhanced_files = sorted(enhanced_files, key=get_fid)
 noisy_files = sorted(noisy_files, key=get_fid)
 
 
-# For llr, wss, cd, bsd, the lower the better 
+# For llr, wss, cd, bsd, the lower the better, others are the higher the better
 metrics = ["fwSNRseg", "SNRseg", "llr", "wss", "cepstrum_distance", "stoi", "csii", "pesq", "composite", "ncm", "srmr"]
 enhanced_results = {}
 noisy_results = {}
