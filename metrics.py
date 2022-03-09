@@ -4,83 +4,112 @@ from glob import glob
 import re
 import librosa
 import pickle
+from tqdm import tqdm
+import multiprocessing
+import numpy as np
+import pandas as pd
 
-
-clean_files = glob("/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/clean/*.wav")
-enhanced_files = glob("./enhanced_audios/estimator_e2e_L2_lr1e-4_lstm/*.wav")
-# noisy_files = glob("/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/noisy/*.wav")
-noisy_files = glob("./enhanced_audios/baseline/*.wav")
-
-
-
-
-fid_pattern = ".fileid_(.*)\.."
-
-# get file id given a path to .wav file
-def get_fid(path):
-    matched = re.findall(fid_pattern, path)
-    if "_" in matched[0]:
-        matched[0] = matched[0].split("_")[0]
-    assert len(matched) == 1, print(path)
-    return matched[0]
-
-clean_files = sorted(clean_files, key=get_fid)
-enhanced_files = sorted(enhanced_files, key=get_fid)
-noisy_files = sorted(noisy_files, key=get_fid)
-
-
-# For llr, wss, cd, bsd, the lower the better, others are the higher the better
-metrics = ["fwSNRseg", "SNRseg", "llr", "wss", "cepstrum_distance", "stoi", "csii", "pesq", "composite", "ncm", "srmr"]
-enhanced_results = {}
-noisy_results = {}
-for metric in metrics:
-    enhanced_results[metric] = []
-    noisy_results[metric] = []
+np.seterr(divide = 'ignore') 
 
 
 
-cnt = 0
-for clean, enhanced, noisy in zip(clean_files, enhanced_files, noisy_files):
-    print(cnt)
-    assert get_fid(clean) == get_fid(enhanced) == get_fid(noisy)
+clean_dir = "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/clean/"
+noisy_dir = "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/noisy/"
+enhanced_dir = "./enhanced_audios/estimator_vae10/"
+demucs_dir = "./enhanced_audios/baseline/"
 
-    clean_speech, fs = librosa.load(clean, sr=16000)
-    enhanced_speech, fs2 = librosa.load(enhanced, sr=16000)
-    noisy_speech, fs3 = librosa.load(noisy, sr=16000)
-    assert fs == fs2 == fs3
-    for metric in metrics:
-        # print(metric)
-        func = getattr(pysepm, metric)
-        if metric != "srmr":
-            enhanced_result = func(clean_speech, enhanced_speech, fs)
-            # print(enhanced_result)
-            enhanced_results[metric].append(enhanced_result)
-            noisy_result = func(clean_speech, noisy_speech, fs)
-            # print(noisy_result)
-            noisy_results[metric].append(noisy_result)
-        else:
-            enhanced_result = func(enhanced_speech, fs)
-            # print(enhanced_result)
-            enhanced_results[metric].append(enhanced_result)
-            noisy_result = func(noisy_speech, fs)
-            # print(noisy_result)
-            noisy_results[metric].append(noisy_result)
-    cnt += 1
 
-for key in enhanced_results.keys():
-    print(key)
-    if key not in ["csii", "pesq", "composite"]: 
-        print(sum(enhanced_results[key]) / len(enhanced_results[key]))
-        print(sum(noisy_results[key]) / len(noisy_results[key]))
-    # elif key == 'pesq':
-    #     print(sum(enhanced_results[key]) / len(enhanced_results[key]))
-    #     print(sum(noisy_results[key]) / len(noisy_results[key]))
+clean_ids   = []
+noisy_ids   = []
+enhanced_ids = []
+demucs_ids = []
 
-f = open("enhanced_results.pkl", "wb")
-pickle.dump(enhanced_results, f)
-f = open("noisy_results.pkl", "wb")
-pickle.dump(noisy_results, f)
+for wav_id in sorted(os.listdir(noisy_dir)):
+    
+    noisy_ids.append(wav_id)
+    enhanced_ids.append(wav_id)
+    demucs_ids.append(wav_id)
+    
+    clean_id = "_".join(["clean"] + wav_id.split("_")[-2:])
+    clean_ids.append(clean_id)
 
 
 
+def get_evaluation(clean_speech, noisy_speech, wav_id, sr = 16000):
+    
+    Y0 = pysepm.fwSNRseg(clean_speech, noisy_speech, sr)
+    Y1 = pysepm.SNRseg(clean_speech, noisy_speech, sr)
+    Y2 = pysepm.llr(clean_speech, noisy_speech, sr)
+    Y3 = pysepm.wss(clean_speech, noisy_speech, sr)
+    Y4 = pysepm.cepstrum_distance(clean_speech, noisy_speech, sr)
+    Y5 = pysepm.stoi(clean_speech, noisy_speech, sr)
+    Y6, Y7, Y8 = pysepm.csii(clean_speech, noisy_speech, sr)
+    _, Y9 = pysepm.pesq(clean_speech, noisy_speech, sr)
+    Y10, Y11, Y12 = pysepm.composite(clean_speech, noisy_speech, sr)
+    Y13 = pysepm.ncm(clean_speech, noisy_speech, sr)
+    Y14 = pysepm.srr_seg(clean_speech, noisy_speech, sr)
+    
+    return [wav_id, 
+            Y0,  Y1,  Y2,  Y3,  Y4,
+            Y5,  Y6,  Y7,  Y8,  Y9,
+            Y10, Y11, Y12, Y13, Y14]
+
+
+
+def execute_multiprocess(clean_dir, clean_ids, noisy_dir, noisy_ids):
+    
+    PROCESSES = 4
+    
+    assert(len(clean_ids) == len(noisy_ids))
+    
+    assert(set(["_".join(["clean"] + n_id.split("_")[-2:]) for n_id in noisy_ids]) == set(clean_ids))
+    
+    # Could be optimized to read in get_evaluation
+    print("Loading Clean Samples")
+    all_clean_speech = [librosa.load(clean_dir + c_id, sr=16000)[0] for c_id in tqdm(clean_ids)]
+    
+    print("Loading Noisy Samples")
+    all_noisy_speech = [librosa.load(noisy_dir + n_id, sr=16000)[0] for n_id in tqdm(noisy_ids)]
+    
+    with multiprocessing.Pool(PROCESSES) as pool:
+        
+        in_args = zip(all_clean_speech, all_noisy_speech, noisy_ids)
+        jobs    = [pool.apply_async(get_evaluation, in_arg) for in_arg in in_args]
+        
+        result = [None] * len(jobs)
+        for i, job in enumerate(tqdm(jobs)):
+            result[i] = job.get()
+    
+    return np.array(result)
+
+
+def save_csv(filename, clean_dir, clean_ids, noisy_dir, noisy_ids):
+    result = execute_multiprocess(clean_dir, clean_ids, noisy_dir, noisy_ids)
+    result_rows = result[:, 0]
+    result_cols = [
+        "fwSNRseg",
+        "SNRseg",
+        "llr",
+        "wss",
+        "cepstrum_distance",
+        "stoi",
+        "csii_1",
+        "csii_2",
+        "csii_3",
+        "pesq",
+        "composite_1",
+        'composite_2',
+        "composite_3",
+        'ncm',
+        "srr_seg"]
+
+    df = pd.DataFrame(result[:, 1:], index=result_rows, columns=result_cols)
+    df.sort_index(inplace=True)
+    df.to_csv(filename)
+    print(df.astype(float).mean())
+
+
+# save_csv("results/noisy.csv", clean_dir, clean_ids, noisy_dir, noisy_ids)
+save_csv("results/enhanced_vae10.csv", clean_dir, clean_ids, enhanced_dir, enhanced_ids)
+# save_csv("results/baseline.csv", clean_dir, clean_ids, demucs_dir, demucs_ids)
 

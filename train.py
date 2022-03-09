@@ -20,7 +20,8 @@ import torch
 import torch.nn as nn
 
 from model import *
-from model.egemaps_estimator import Egemaps_estimator
+from model.egemaps_estimator import Egemaps_estimator, SelfAttentionPooling
+from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer import Trainer
@@ -68,9 +69,10 @@ def main(args):
         model.load_state_dict(state_dict)
 
         if args.estimatorPath is not None:
-            estimator = Egemaps_estimator(smile_F=smile_F)
+            # estimator = Egemaps_estimator(smile_F=smile_F)
+            estimator = VAE(**args.vae)
             package = torch.load(args.estimatorPath)
-            estimator.load_state_dict(package['state'])
+            estimator.load_state_dict(package['state'], strict=False)
             logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
         else:
             estimator = None
@@ -83,19 +85,19 @@ def main(args):
     stride = int(args.stride * args.fs)
     tr_noisy_dir = os.path.join(args.dataPath, args.trainPath, "noisy")
     tr_clean_dir = os.path.join(args.dataPath, args.trainPath, "clean")
-    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path)
+    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, egemaps_lld_path=args.egemaps_lld_train_path, spec_path=args.spec_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of train files: %s" % len(tr_dataset))
     cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
     cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path)
+    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, egemaps_lld_path=args.egemaps_lld_valid_path, spec_path=args.spec_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
     tt_noisy_dir = os.path.join(args.dataPath, args.testPath, "noisy")
     tt_clean_dir = os.path.join(args.dataPath, args.testPath, "clean")
-    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs)
+    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, egemaps_lld_path=args.egemaps_lld_test_path, spec_path=args.spec_test_path)
     tt_loader = distrib.loader(
         tt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of test files: %s" % len(tt_dataset))
@@ -105,6 +107,11 @@ def main(args):
     if torch.cuda.is_available():
         model.cuda()
         if estimator is not None:
+            model.fc = nn.Sequential(
+                    SelfAttentionPooling(938),
+                    nn.Linear(938, 256),
+                    nn.ReLU(),
+                    nn.Linear(256, 88)).cuda()
             estimator.cuda()
         else:
             estimator = Egemaps_estimator().cuda()
@@ -117,7 +124,7 @@ def main(args):
             #     ).cuda()
 
     if args.optim == "Adam":
-        optimizer = torch.optim.Adam(list(model.parameters()) + list(estimator.parameters()), lr=float(args.lr), betas=(0.9, args.beta2))
+        optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
         

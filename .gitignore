@@ -2,7 +2,10 @@
 exp/
 s3prl/
 egemaps_functionals/
+egemaps_lld/
+spec/
 enhanced_audios/
+results/
 
 # custom scripts
 misc/

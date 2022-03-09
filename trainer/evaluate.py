@@ -60,7 +60,9 @@ def evaluate(args, model=None, data_loader=None):
             iterator = LogProgress(logger, data_loader, name="Eval estimates")
             for i, data in enumerate(iterator):
                 # Get batch data
-                noisy, clean = [x.to(args.device) for x in data]
+                data = [x.to(args.device) for x in data]
+                noisy = data[0]
+                clean = data[1]
                 # If device is CPU, we do parallel evaluation in each CPU worker.
                 if args.device == 'cpu':
                     pendings.append(

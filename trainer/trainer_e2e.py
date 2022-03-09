@@ -211,14 +211,12 @@ class Trainer(object):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
-            spec = data[3]
-            spec = spec.transpose(1, 2)
             if not cross_valid:
                 sources = torch.stack([noisy - clean, clean])
                 sources = self.augment(sources)
                 noise, clean = sources
                 noisy = noise + clean
-            estimate, _ = self.dmodel(noisy)
+            estimate, encoded_out = self.dmodel(noisy)
             # apply a loss function after each layer
             with torch.autograd.set_detect_anomaly(True):
                 if self.args.loss == 'l1':
@@ -236,15 +234,11 @@ class Trainer(object):
                 
                 if self.estimator is not None:
                     egemaps = data[2]
-                    egemaps_lld = data[4]
-                    encoded_out = self.estimator(spec).encoder_out.global_sample
-                    encoded_out = encoded_out.transpose(1, 2)
-                    # print(encoded_out.shape)
-                    # print(egemaps_lld.shape)
-                    estimated_egemaps = self.dmodel.fc(encoded_out)
-                    # print(estimated_egemaps.shape)
-                    # assert False
-                    egemaps_loss = F.mse_loss(estimated_egemaps, egemaps)
+                    # estimated_egemaps = self.estimator(estimate)
+                    # encoded_out = encoded_out.mean(dim=1)
+                    estimated_egemaps = self.estimator(encoded_out)
+                    # print(self.estimator.state_dict().keys())
+                    egemaps_loss = F.mse_loss(egemaps, estimated_egemaps)
                     print("*****")
                     print(egemaps_loss)
                     print(loss)

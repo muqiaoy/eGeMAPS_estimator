@@ -72,17 +72,21 @@ class Egemaps_estimator(nn.Module):
     @capture_init
     def __init__(self):
         super().__init__()
-        self.lstm = nn.LSTM(1874, 512, batch_first=True, num_layers=3, bidirectional=True )
-        self.linear = nn.Sequential(
-                        nn.Linear(1024, 256),
-                        nn.ReLU(),
-                        nn.Dropout(0.3),
-                        nn.Linear(256, 88))
+        self.lstm1 = nn.LSTM(1874, 512, batch_first=True, num_layers=3, bidirectional=True, dropout=0.3)
+        self.lstm2 = nn.LSTM(1024, 256, batch_first=True, num_layers=3, bidirectional=True, dropout=0.3)
+        self.lstm3 = nn.LSTM(512, 88, batch_first=True, num_layers=3, bidirectional=False, dropout=0.3)
+        # self.linear = nn.Sequential(
+        #                 nn.Linear(1024, 256),
+        #                 nn.ReLU(),
+        #                 nn.Dropout(0.3),
+        #                 nn.Linear(256, 88))
         self.pool = SelfAttentionPooling(88)
 
     def forward(self, features):
-        hidden, _ = self.lstm(features)
-        hidden = self.linear(hidden)
+        hidden, _ = self.lstm1(features)
+        hidden, _ = self.lstm2(hidden)
+        hidden, _ = self.lstm3(hidden)
+        # hidden = self.linear(hidden)
         estimated_egemaps = self.pool(hidden)
         return estimated_egemaps
 

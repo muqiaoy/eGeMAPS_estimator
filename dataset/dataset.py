@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import opensmile
+import librosa
 
 import numpy as np
 import torch
@@ -71,7 +72,7 @@ def match_files(noisy, clean, matching="dns"):
 
 class NoisyCleanSet:
     def __init__(self, noisy_dir, clean_dir, num_files=None, matching="sort", length=None, stride=None,
-                 pad=True, sample_rate=None, egemaps_path=None):
+                 pad=True, sample_rate=None, egemaps_path=None, egemaps_lld_path=None, spec_path=None):
         """__init__.
         :param json_dir: directory containing both clean.json and noisy.json
         :param matching: matching function for the files
@@ -82,6 +83,7 @@ class NoisyCleanSet:
         """
         noisy = find_audio_files(noisy_dir)
         clean = find_audio_files(clean_dir)
+        print(clean_dir)
 
         match_files(noisy, clean, matching)
         kw = {'length': length, 'stride': stride, 'pad': pad, 'sample_rate': sample_rate}
@@ -93,6 +95,8 @@ class NoisyCleanSet:
 
         # If egemaps_path is not None, __getitem__() will output one more object which is the egemaps features
         self.egemaps_path = egemaps_path
+        self.spec_path = spec_path
+        self.egemaps_lld_path = egemaps_lld_path
 
 
         # generate the egemaps features for the 1st time if it does not exist
@@ -112,18 +116,54 @@ class NoisyCleanSet:
                 if num_files is not None and num_files < len(self.egemaps):
                     self.egemaps = self.egemaps[:num_files]
                 assert len(self.egemaps) == len(self.clean_set), \
-                    "There is a mismatch between the length of the saved egemaps features and the dataset. You may want to regenerate the features."
+                    "There is a mismatch between the length of the saved egemaps features (%s) and the dataset (%s). You may want to regenerate the features." % (len(self.egemaps), len(self.clean_set))
 
             self.egemaps = torch.nn.functional.normalize(self.egemaps)
 
+        if egemaps_lld_path is not None:
+            if not os.path.exists(egemaps_lld_path):
+                self.smile_F = opensmile.Smile(
+                    feature_set=opensmile.FeatureSet.eGeMAPSv02,
+                    feature_level=opensmile.FeatureLevel.LowLevelDescriptors)
+                print(self.clean_set[0].shape[-1] // 160 - 4)
+                self.egemaps_lld = torch.zeros(len(self.clean_set), self.clean_set[0].shape[-1] // 160 - 4, len(self.smile_F.feature_names))
+                for i in range(len(self.clean_set)):
+                    self.egemaps_lld[i] = torch.from_numpy(self.smile_F.process_signal(self.clean_set[i], sampling_rate=sample_rate).values)
+                if not os.path.exists("egemaps_lld"):
+                    os.makedirs("egemaps_lld")
+                np.save(os.path.join("egemaps_lld", os.path.basename(egemaps_lld_path)), self.egemaps_lld.numpy())
+            else:
+                self.egemaps_lld = torch.from_numpy(np.load(egemaps_lld_path))
+                if num_files is not None and num_files < len(self.egemaps_lld):
+                    self.egemaps_lld = self.egemaps_lld[:num_files]
+                assert len(self.egemaps_lld) == len(self.clean_set), \
+                    "There is a mismatch between the length of the saved egemaps features (%s) and the dataset (%s). You may want to regenerate the features." % (len(self.egemaps_lld), len(self.clean_set))
+
+            self.egemaps_lld = torch.nn.functional.normalize(self.egemaps_lld)
+
+        if spec_path is not None:
+            if not os.path.exists(spec_path):
+                self.spec = torch.zeros(len(self.clean_set), 128, 938 if self.clean_set[0].shape[-1] == 480000 else 313)
+                for i in range(len(self.clean_set)):
+                    self.spec[i] = torch.from_numpy(librosa.feature.melspectrogram(y=self.clean_set[i].numpy(), sr=sample_rate))
+                if not os.path.exists("spec"):
+                    os.makedirs("spec")
+                np.save(os.path.join("spec", os.path.basename(spec_path)), self.spec.numpy())
+            else:
+                self.spec = torch.from_numpy(np.load(spec_path))
+                if num_files is not None and num_files < len(self.spec):
+                    self.spec = self.spec[:num_files]
+                assert len(self.spec) == len(self.clean_set), \
+                    "There is a mismatch between the length of the saved spectrograms (%s) and the dataset (%s). You may want to regenerate the features." % (len(self.spec), len(self.clean_set))
+
+
+            self.spec = torch.nn.functional.normalize(self.spec)
 
         assert len(self.clean_set) == len(self.noisy_set)
 
     def __getitem__(self, index):
-        if self.egemaps_path is not None:
-            return self.noisy_set[index], self.clean_set[index], self.egemaps[index]
-        else:
-            return self.noisy_set[index], self.clean_set[index]
+        
+        return self.noisy_set[index], self.clean_set[index], self.egemaps[index] if self.egemaps_path is not None else torch.Tensor(-1), self.spec[index] if self.spec_path is not None else torch.Tensor(-1), self.egemaps_lld[index] if self.egemaps_lld_path is not None else torch.Tensor(-1)
 
     def __len__(self):
         return len(self.noisy_set)

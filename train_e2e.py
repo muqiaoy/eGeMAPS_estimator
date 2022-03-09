@@ -3,6 +3,7 @@
 #
 # Copyright (C) 2022 Muqiao Yang <muqiaoy@andrew.cmu.edu>
 
+
 import logging
 import argparse
 import json
@@ -16,13 +17,13 @@ import shutil
 import opensmile
 
 import torch
+import torch.nn as nn
 
 from model import *
 from model.egemaps_estimator import Egemaps_estimator
-from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
-from trainer.trainer_est import Trainer_est
+from trainer.trainer import Trainer
 
 
 def main(args):
@@ -52,10 +53,28 @@ def main(args):
         feature_set=opensmile.FeatureSet.eGeMAPSv02,
         feature_level=opensmile.FeatureLevel.Functionals)
 
-    if args.model == 'estimator':
-        estimator = Egemaps_estimator()
-    elif args.model == 'VAE':
-        estimator = VAE(**args.vae)
+    if args.model == 'NSNet2':
+        # raise NotImplementedError
+        model = NSNet2(modelfile=args.modelPath, cfg=args.cfg)
+        print(model.model)
+        print(type(model.model.Shape_21))
+        for n, v in model.state_dict().items():
+            print(n)
+            print(v.shape)
+        logging.info("Loaded checkpoint from %s" % args.modelPath)
+    elif args.model == 'Demucs':
+        model = Demucs(**args.demucs, sample_rate=args.fs)
+        state_dict = torch.load(args.modelPath)
+        model.load_state_dict(state_dict)
+
+        if args.estimatorPath is not None:
+            estimator = Egemaps_estimator(smile_F=smile_F)
+            package = torch.load(args.estimatorPath)
+            estimator.load_state_dict(package['state'])
+            logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
+        else:
+            estimator = None
+            logging.info("Loaded checkpoint from %s" % (args.modelPath))
 
     else:
         raise NotImplementedError(feat_dim=args.egemaps_dim)
@@ -64,19 +83,19 @@ def main(args):
     stride = int(args.stride * args.fs)
     tr_noisy_dir = os.path.join(args.dataPath, args.trainPath, "noisy")
     tr_clean_dir = os.path.join(args.dataPath, args.trainPath, "clean")
-    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, spec_path=args.spec_train_path)
+    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of train files: %s" % len(tr_dataset))
     cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
     cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, spec_path=args.spec_valid_path)
+    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
     tt_noisy_dir = os.path.join(args.dataPath, args.testPath, "noisy")
     tt_clean_dir = os.path.join(args.dataPath, args.testPath, "clean")
-    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, spec_path=args.spec_test_path)
+    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs)
     tt_loader = distrib.loader(
         tt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of test files: %s" % len(tt_dataset))
@@ -84,14 +103,25 @@ def main(args):
     data = {"tr_loader": tr_loader, "cv_loader": cv_loader, "tt_loader": tt_loader}
 
     if torch.cuda.is_available():
-        estimator.cuda()
+        model.cuda()
+        if estimator is not None:
+            estimator.cuda()
+        else:
+            estimator = Egemaps_estimator().cuda()
+            # estimator = nn.Sequential(
+            #     nn.Linear(1874, 1024),
+            #     nn.ReLU(),
+            #     nn.Linear(1024, 256),
+            #     nn.ReLU(),
+            #     nn.Linear(256, 88)
+            #     ).cuda()
 
     if args.optim == "Adam":
-        optimizer = torch.optim.Adam(estimator.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
+        optimizer = torch.optim.Adam(list(model.parameters()) + list(estimator.parameters()), lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
         
-    trainer = Trainer_est(data, estimator, optimizer, args)
+    trainer = Trainer(data, model, estimator, optimizer, args)
     trainer.train()
 
 

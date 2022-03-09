@@ -50,7 +50,7 @@ def deserialize_model(package, strict=False):
                 logger.warning("Dropping inexistant parameter %s", key)
                 del kw[key]
         model = klass(*package['args'], **kw)
-    model.load_state_dict(package['state'])
+    model.load_state_dict(package['state'], strict=False)
     return model
 
 
