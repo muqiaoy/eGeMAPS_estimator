@@ -22,6 +22,8 @@ sys.path.insert(0,parentdir)
 from dataset.audioset import Audioset, find_audio_files
 from dataset import distrib
 from . import load_pretrained
+from model import *
+from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
 
 from .utils import LogProgress
 
@@ -33,7 +35,7 @@ def add_flags(parser):
     Add the flags for the argument parser that are related to model loading and evaluation"
     """
     load_pretrained.add_model_flags(parser)
-    parser.add_argument('--device', default="cpu")
+    parser.add_argument('--device', default="cuda:0")
     parser.add_argument('--dry', type=float, default=0,
                         help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
     parser.add_argument('--num_workers', type=int, default=10)
@@ -64,8 +66,26 @@ def get_estimate(model, noisy, args):
         raise NotImplementedError
     else:
         with torch.no_grad():
-            estimate, _ = model(noisy)
-            estimate = (1 - args.dry) * estimate + args.dry * noisy
+            if isinstance(model, Demucs):
+                estimate, _ = model(noisy)
+                estimate = (1 - args.dry) * estimate + args.dry * noisy
+            elif isinstance(model, FullSubNet):
+                # full band crm mask
+
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = model.stft(torch.squeeze(noisy, dim=1))
+
+                noisy_mag = noisy_mag.unsqueeze(1)
+                pred_crm = model(noisy_mag, dropping_band=False)
+                pred_crm = pred_crm.permute(0, 2, 3, 1)
+
+                pred_crm = decompress_cIRM(pred_crm)
+                enhanced_real = pred_crm[..., 0] * noisy_real - pred_crm[..., 1] * noisy_imag
+                enhanced_imag = pred_crm[..., 1] * noisy_real + pred_crm[..., 0] * noisy_imag
+                estimate = model.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = torch.unsqueeze(estimate, dim=1)
+                # estimate = enhanced.detach().squeeze(0).cpu().numpy()
+            else:
+                raise NotImplementedError
     return estimate
 
 
@@ -83,7 +103,7 @@ def write(wav, filename, sr=16_000):
     torchaudio.save(filename, wav.cpu(), sr)
 
 
-def get_dataset(args, sample_rate, channels):
+def get_dataset(args, sample_rate, channels=1):
     if hasattr(args, 'dset'):
         paths = args.dset
     else:
@@ -117,7 +137,7 @@ def enhance(args, model=None, local_out_dir=None):
     else:
         out_dir = args.out_dir
 
-    dset = get_dataset(args, model.sample_rate, model.chin)
+    dset = get_dataset(args, model.sample_rate)
     if dset is None:
         return
     loader = distrib.loader(dset, batch_size=1)

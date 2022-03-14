@@ -15,7 +15,8 @@ np.seterr(divide = 'ignore')
 
 clean_dir = "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/clean/"
 noisy_dir = "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets/test_set/synthetic/no_reverb/noisy/"
-enhanced_dir = "./enhanced_audios/estimator_vae10/"
+# enhanced_dir = "./enhanced_audios/fsn_finetune/"
+enhanced_dir = "/home/muqiaoy/workhorse3/workspace/eGeMAPS_estimator/enhanced_audios/estimator_vae_weight_13cols/"
 demucs_dir = "./enhanced_audios/baseline/"
 
 
@@ -110,6 +111,6 @@ def save_csv(filename, clean_dir, clean_ids, noisy_dir, noisy_ids):
 
 
 # save_csv("results/noisy.csv", clean_dir, clean_ids, noisy_dir, noisy_ids)
-save_csv("results/enhanced_vae10.csv", clean_dir, clean_ids, enhanced_dir, enhanced_ids)
+save_csv("results/enhanced_vae_lld_13cols.csv", clean_dir, clean_ids, enhanced_dir, enhanced_ids)
 # save_csv("results/baseline.csv", clean_dir, clean_ids, demucs_dir, demucs_ids)
 

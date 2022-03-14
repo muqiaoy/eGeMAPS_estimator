@@ -78,6 +78,19 @@ def main(args):
             estimator = None
             logging.info("Loaded checkpoint from %s" % (args.modelPath))
 
+    elif args.model == 'FullSubNet':
+        model = FullSubNet(**args.fullsubnet, sample_rate=args.fs)
+        state_dict = torch.load(args.modelPath)["model"]
+        model.load_state_dict(state_dict)
+        if args.estimatorPath is not None:
+            # estimator = Egemaps_estimator(smile_F=smile_F)
+            estimator = VAE(**args.vae)
+            package = torch.load(args.estimatorPath)
+            estimator.load_state_dict(package['state'], strict=False)
+            logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
+        else:
+            estimator = None
+            logging.info("Loaded checkpoint from %s" % (args.modelPath))
     else:
         raise NotImplementedError(feat_dim=args.egemaps_dim)
         
@@ -107,14 +120,31 @@ def main(args):
     if torch.cuda.is_available():
         model.cuda()
         if estimator is not None:
+            # model.fc = nn.Sequential(
+            #         nn.Conv1d(256, 1024, kernel_size=3),
+            #         nn.BatchNorm1d(1024),
+            #         nn.ReLU(),
+            #         nn.Conv1d(1024, 2048, kernel_size=3),
+            #         nn.BatchNorm1d(2048),
+            #         nn.ReLU(),
+            #         nn.Conv1d(2048, 2996, kernel_size=3),
+            #         nn.BatchNorm1d(2996),
+            #         nn.ReLU(),
+            #         nn.Linear(932, 128),
+            #         nn.ReLU(),
+            #         nn.Linear(128, 25)).cuda()
             model.fc = nn.Sequential(
-                    SelfAttentionPooling(938),
-                    nn.Linear(938, 256),
-                    nn.ReLU(),
-                    nn.Linear(256, 88)).cuda()
+                SelfAttentionPooling(256),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 88)
+                ).cuda()
             estimator.cuda()
         else:
-            estimator = Egemaps_estimator().cuda()
+            estimator = None
+            # estimator = Egemaps_estimator().cuda()
             # estimator = nn.Sequential(
             #     nn.Linear(1874, 1024),
             #     nn.ReLU(),

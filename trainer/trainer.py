@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 import os
 import time
+import numpy as np
 
 import torch
 import torch.nn.functional as F
@@ -23,6 +24,8 @@ from .enhance import enhance
 from .evaluate import evaluate
 from .stft_loss import MultiResolutionSTFTLoss
 from .utils import bold, copy_state, pull_metric, serialize_model, swap_state, LogProgress
+from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
+from model.FullSubNet.feature import drop_band
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,9 @@ class Trainer(object):
         self.args = args
         self.mrstftloss = MultiResolutionSTFTLoss(factor_sc=args.stft_sc_factor,
                                                   factor_mag=args.stft_mag_factor).to(self.device)
+        self.weight = torch.from_numpy(np.load("weights/train_normalized_fun_ege_weights_raw.npy")).cuda()
+        self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+        # self.weight = self.weight ** 2
         self._reset()
 
     def _serialize(self):
@@ -139,7 +145,8 @@ class Trainer(object):
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
             self.model.train()
-            self.estimator.train()
+            if self.estimator is not None:
+                self.estimator.train()
             start = time.time()
             logger.info('-' * 70)
             logger.info("Training...")
@@ -153,7 +160,8 @@ class Trainer(object):
                 logger.info('-' * 70)
                 logger.info('Cross validation...')
                 self.model.eval()
-                self.estimator.eval()
+                if self.estimator is not None:
+                    self.estimator.eval()
                 with torch.no_grad():
                     valid_loss = self._run_one_epoch(epoch, cross_valid=True)
                 logger.info(
@@ -218,33 +226,58 @@ class Trainer(object):
                 sources = self.augment(sources)
                 noise, clean = sources
                 noisy = noise + clean
-            estimate, _ = self.dmodel(noisy)
-            # apply a loss function after each layer
-            with torch.autograd.set_detect_anomaly(True):
-                if self.args.loss == 'l1':
-                    loss = F.l1_loss(clean, estimate)
-                elif self.args.loss == 'l2':
-                    loss = F.mse_loss(clean, estimate)
-                elif self.args.loss == 'huber':
-                    loss = F.smooth_l1_loss(clean, estimate)
-                else:
-                    raise ValueError(f"Invalid loss {self.args.loss}")
-                # MultiResolution STFT loss
-                if self.args.stft_loss:
-                    sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
-                    loss += sc_loss + mag_loss
+            if self.args.model == "Demucs":
+                estimate, _ = self.dmodel(noisy)
+                # apply a loss function after each layer
+                with torch.autograd.set_detect_anomaly(True):
+                    if self.args.loss == 'l1':
+                        loss = F.l1_loss(clean, estimate)
+                    elif self.args.loss == 'l2':
+                        loss = F.mse_loss(clean, estimate)
+                    elif self.args.loss == 'huber':
+                        loss = F.smooth_l1_loss(clean, estimate)
+                    else:
+                        raise ValueError(f"Invalid loss {self.args.loss}")
+                    # MultiResolution STFT loss
+                    if self.args.stft_loss:
+                        sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
+                        loss += sc_loss + mag_loss
+            elif self.args.model == "FullSubNet":
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.stft(torch.squeeze(noisy))
+                _, _, clean_real, clean_imag = self.dmodel.stft(torch.squeeze(clean))
+                cIRM = build_complex_ideal_ratio_mask(noisy_real, noisy_imag, clean_real, clean_imag)  # [B, F, T, 2]
+                cIRM = drop_band(
+                    cIRM.permute(0, 3, 1, 2),  # [B, 2, F ,T]
+                    self.dmodel.num_groups_in_drop_band
+                ).permute(0, 2, 3, 1)
+                noisy_mag = noisy_mag.unsqueeze(1)
+                cRM = self.dmodel(noisy_mag)
+                cRM = cRM.permute(0, 2, 3, 1)
+                with torch.autograd.set_detect_anomaly(True):
+                    if self.args.loss == 'l1':
+                        loss = F.l1_loss(cIRM, cRM)
+                    elif self.args.loss == 'l2':
+                        loss = F.mse_loss(cIRM, cRM)
+                    elif self.args.loss == 'huber':
+                        loss = F.smooth_l1_loss(cIRM, cRM)
+                    print(loss)
+
+            else:
+                raise NotImplementedError
                 
+            with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
                     egemaps = data[2]
                     egemaps_lld = data[4]
                     encoded_out = self.estimator(spec).encoder_out.global_sample
-                    encoded_out = encoded_out.transpose(1, 2)
+                    # encoded_out = encoded_out.transpose(1, 2)
                     # print(encoded_out.shape)
                     # print(egemaps_lld.shape)
                     estimated_egemaps = self.dmodel.fc(encoded_out)
                     # print(estimated_egemaps.shape)
                     # assert False
-                    egemaps_loss = F.mse_loss(estimated_egemaps, egemaps)
+                    # egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
+                    egemaps_loss = F.mse_loss(self.weight[88:, -1] *estimated_egemaps + self.weight[:88, -1] * egemaps)
                     print("*****")
                     print(egemaps_loss)
                     print(loss)
@@ -259,5 +292,7 @@ class Trainer(object):
             total_loss += loss.item()
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
-            del loss, estimate
+            del loss
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
+
+

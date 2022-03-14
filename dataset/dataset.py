@@ -120,6 +120,7 @@ class NoisyCleanSet:
 
             self.egemaps = torch.nn.functional.normalize(self.egemaps)
 
+        # print(self.clean_set[0].shape[-1] // 160 - 4)
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
                 self.smile_F = opensmile.Smile(

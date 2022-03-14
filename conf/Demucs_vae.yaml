@@ -3,7 +3,7 @@
 cpu: False
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
 estimatorPath: "exp/VAE/best.th"
-savePath: "exp/Demucs_vae"
+savePath: "exp/Demucs_vae_weight_13cols"
 seed: 2
 
 
@@ -61,7 +61,7 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff
-egemaps_factor: .3
+egemaps_factor: 1.
 egemaps_train_path: egemaps_functionals/train.npy
 egemaps_valid_path: egemaps_functionals/valid.npy
 egemaps_test_path: egemaps_functionals/test.npy

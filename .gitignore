@@ -5,7 +5,9 @@ egemaps_functionals/
 egemaps_lld/
 spec/
 enhanced_audios/
-results/
+results_metrics/
+results_dnsmos/
+weights/
 
 # custom scripts
 misc/
