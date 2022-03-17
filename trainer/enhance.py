@@ -108,11 +108,13 @@ def get_dataset(args, sample_rate, channels=1):
         paths = args.dset
     else:
         paths = args
-    if paths.noisy_json:
+    if hasattr(paths, "noisy_json") and paths.noisy_json:
         with open(paths.noisy_json) as f:
             files = json.load(f)
-    elif paths.noisy_dir:
+    elif hasattr(paths, "noisy_dir") and paths.noisy_dir:
         files = find_audio_files(paths.noisy_dir)
+    elif hasattr(paths, "testPath") and paths.testPath:
+        files = find_audio_files(os.path.join(paths.dataPath, paths.testPath, "noisy"))
     else:
         logger.warning(
             "Small sample set was not provided by either noisy_dir or noisy_json. "

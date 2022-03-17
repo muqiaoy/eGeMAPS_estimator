@@ -50,6 +50,7 @@ def main(args):
                 shutil.move(p, pn)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
+    logging.info(args)
     smile_F = opensmile.Smile(
         feature_set=opensmile.FeatureSet.eGeMAPSv02,
         feature_level=opensmile.FeatureLevel.Functionals)
@@ -92,7 +93,7 @@ def main(args):
             estimator = None
             logging.info("Loaded checkpoint from %s" % (args.modelPath))
     else:
-        raise NotImplementedError(feat_dim=args.egemaps_dim)
+        raise NotImplementedError(args.model)
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
@@ -120,38 +121,34 @@ def main(args):
     if torch.cuda.is_available():
         model.cuda()
         if estimator is not None:
-            # model.fc = nn.Sequential(
-            #         nn.Conv1d(256, 1024, kernel_size=3),
-            #         nn.BatchNorm1d(1024),
-            #         nn.ReLU(),
-            #         nn.Conv1d(1024, 2048, kernel_size=3),
-            #         nn.BatchNorm1d(2048),
-            #         nn.ReLU(),
-            #         nn.Conv1d(2048, 2996, kernel_size=3),
-            #         nn.BatchNorm1d(2996),
-            #         nn.ReLU(),
-            #         nn.Linear(932, 128),
-            #         nn.ReLU(),
-            #         nn.Linear(128, 25)).cuda()
-            model.fc = nn.Sequential(
-                SelfAttentionPooling(256),
-                nn.Linear(256, 128),
-                nn.ReLU(),
-                nn.Linear(128, 128),
-                nn.ReLU(),
-                nn.Linear(128, 88)
-                ).cuda()
+            if args.egemaps_type == 'lld':
+                model.fc = nn.Sequential(
+                        nn.Conv1d(256, 1024, kernel_size=3),
+                        nn.BatchNorm1d(1024),
+                        nn.ReLU(),
+                        nn.Conv1d(1024, 2048, kernel_size=3),
+                        nn.BatchNorm1d(2048),
+                        nn.ReLU(),
+                        nn.Conv1d(2048, 2996, kernel_size=3),
+                        nn.BatchNorm1d(2996),
+                        nn.ReLU(),
+                        nn.Linear(932, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 25)).cuda()
+            elif args.egemaps_type == 'functionals':
+                model.fc = nn.Sequential(
+                        SelfAttentionPooling(256),
+                        nn.Linear(256, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 88)
+                        ).cuda()
+            else:
+                raise NotImplementedError
             estimator.cuda()
         else:
             estimator = None
-            # estimator = Egemaps_estimator().cuda()
-            # estimator = nn.Sequential(
-            #     nn.Linear(1874, 1024),
-            #     nn.ReLU(),
-            #     nn.Linear(1024, 256),
-            #     nn.ReLU(),
-            #     nn.Linear(256, 88)
-            #     ).cuda()
 
     if args.optim == "Adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
@@ -182,6 +179,6 @@ if __name__ == "__main__":
         args.__dict__.update(conf_args.__dict__)
         args.device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
 
-    print(args)
+    # print(args)
     set_seed(args.seed)
     main(args)

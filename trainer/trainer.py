@@ -77,9 +77,11 @@ class Trainer(object):
         self.args = args
         self.mrstftloss = MultiResolutionSTFTLoss(factor_sc=args.stft_sc_factor,
                                                   factor_mag=args.stft_mag_factor).to(self.device)
-        self.weight = torch.from_numpy(np.load("weights/train_normalized_fun_ege_weights_raw.npy")).cuda()
-        self.weight = torch.nn.functional.normalize(self.weight, dim=0)
-        # self.weight = self.weight ** 2
+        if args.weightPath is not None:
+            self.weight = torch.from_numpy(np.load(args.weightPath)).cuda()
+            # self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+        else:
+            self.weight = None
         self._reset()
 
     def _serialize(self):
@@ -142,6 +144,12 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
+        logger.info('Enhance and save samples...')
+        out_dir = os.path.join(self.args.savePath, "0")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        enhance(self.args, self.model, out_dir)
+
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
             self.model.train()
@@ -190,8 +198,12 @@ class Trainer(object):
                 metrics.update({'pesq': pesq, 'stoi': stoi})
 
                 # enhance some samples
-                # logger.info('Enhance and save samples...')
-                # enhance(self.args, self.model, self.samples_dir)
+                logger.info('Enhance and save samples...')
+                out_dir = os.path.join(self.args.savePath, str(epoch + 1))
+                if not os.path.exists(out_dir):
+                    os.makedirs(out_dir)
+                enhance(self.args, self.model, out_dir)
+
 
             self.history.append(metrics)
             info = " | ".join(f"{k.capitalize()} {v:.5f}" for k, v in metrics.items() if k != 'epoch')
@@ -267,17 +279,19 @@ class Trainer(object):
                 
             with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
-                    egemaps = data[2]
+                    egemaps_func = data[2]
                     egemaps_lld = data[4]
                     encoded_out = self.estimator(spec).encoder_out.global_sample
-                    # encoded_out = encoded_out.transpose(1, 2)
-                    # print(encoded_out.shape)
-                    # print(egemaps_lld.shape)
                     estimated_egemaps = self.dmodel.fc(encoded_out)
-                    # print(estimated_egemaps.shape)
-                    # assert False
-                    # egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
-                    egemaps_loss = F.mse_loss(self.weight[88:, -1] *estimated_egemaps + self.weight[:88, -1] * egemaps)
+                    if self.args.egemaps_type == "functionals":
+                        true_egemaps = egemaps_func
+                        if self.weight is not None:
+                            egemaps_loss = torch.norm(self.weight[88:, -1] *estimated_egemaps + self.weight[:88, -1] * egemaps_func)
+                        else:
+                            egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_func)
+
+                    elif self.args.egemaps_type == "lld":
+                        egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
                     print("*****")
                     print(egemaps_loss)
                     print(loss)

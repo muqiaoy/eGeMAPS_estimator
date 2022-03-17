@@ -120,13 +120,12 @@ class NoisyCleanSet:
 
             self.egemaps = torch.nn.functional.normalize(self.egemaps)
 
-        # print(self.clean_set[0].shape[-1] // 160 - 4)
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
                 self.smile_F = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
                     feature_level=opensmile.FeatureLevel.LowLevelDescriptors)
-                print(self.clean_set[0].shape[-1] // 160 - 4)
+                # print(self.clean_set[0].shape[-1] // 160 - 4)
                 self.egemaps_lld = torch.zeros(len(self.clean_set), self.clean_set[0].shape[-1] // 160 - 4, len(self.smile_F.feature_names))
                 for i in range(len(self.clean_set)):
                     self.egemaps_lld[i] = torch.from_numpy(self.smile_F.process_signal(self.clean_set[i], sampling_rate=sample_rate).values)
@@ -164,7 +163,7 @@ class NoisyCleanSet:
 
     def __getitem__(self, index):
         
-        return self.noisy_set[index], self.clean_set[index], self.egemaps[index] if self.egemaps_path is not None else torch.Tensor(-1), self.spec[index] if self.spec_path is not None else torch.Tensor(-1), self.egemaps_lld[index] if self.egemaps_lld_path is not None else torch.Tensor(-1)
+        return self.noisy_set[index], self.clean_set[index], self.egemaps[index] if self.egemaps_path is not None else torch.Tensor([-1]), self.spec[index] if self.spec_path is not None else torch.Tensor([-1]), self.egemaps_lld[index] if self.egemaps_lld_path is not None else torch.Tensor([-1])
 
     def __len__(self):
         return len(self.noisy_set)
