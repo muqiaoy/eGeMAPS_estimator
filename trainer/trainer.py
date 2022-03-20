@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
-    def __init__(self, data, model, estimator, optimizer, args):
+    def __init__(self, data, model, estimator, optimizer, args, scheduler=None):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
@@ -43,6 +43,7 @@ class Trainer(object):
         # if self.estimator is not None:
         #     self.estimator.eval()
         self.optimizer = optimizer
+        self.scheduler = scheduler
 
         # data augment
         augments = []
@@ -90,7 +91,10 @@ class Trainer(object):
 
     def _serialize(self):
         package = {}
-        package['model'] = serialize_model(self.model)
+        if isinstance(self.model, torch.nn.DataParallel):
+            package['model'] = serialize_model(self.model.module)
+        else:
+            package['model'] = serialize_model(self.model)
         package['optimizer'] = self.optimizer.state_dict()
         package['history'] = self.history
         package['best_state'] = self.best_state
@@ -148,11 +152,11 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
-        # logger.info('Enhance and save samples...')
-        # out_dir = os.path.join(self.args.savePath, "0")
-        # if not os.path.exists(out_dir):
-        #     os.makedirs(out_dir)
-        # enhance(self.args, self.model, out_dir)
+        logger.info('Enhance and save samples...')
+        out_dir = os.path.join(self.args.savePath, "0")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        enhance(self.args, self.model, out_dir)
 
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
@@ -330,6 +334,8 @@ class Trainer(object):
                     print("*****")
                     print(egemaps_loss)
                     print(loss)
+                    if self.scheduler is not None:
+                        self.scheduler.step(loss)
 
                 # optimize model in training mode
                 if not cross_valid:
@@ -341,6 +347,8 @@ class Trainer(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss
+            if not cross_valid:
+                break
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 

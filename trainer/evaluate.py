@@ -52,7 +52,7 @@ def evaluate(args, model=None, data_loader=None):
     # Load data
     if data_loader is None:
         dataset = NoisyCleanSet(args.data_dir,
-                                matching=args.matching, sample_rate=model.sample_rate)
+                                matching=args.matching, sample_rate=args.fs)
         data_loader = distrib.loader(dataset, batch_size=1, num_workers=2)
     pendings = []
     with ProcessPoolExecutor(args.num_workers) as pool:
@@ -72,7 +72,7 @@ def evaluate(args, model=None, data_loader=None):
                     estimate = estimate.cpu()
                     clean = clean.cpu()
                     pendings.append(
-                        pool.submit(_run_metrics, clean, estimate, args, model.sample_rate))
+                        pool.submit(_run_metrics, clean, estimate, args, args.fs))
                 total_cnt += clean.shape[0]
 
         for pending in LogProgress(logger, pendings, updates, name="Eval metrics"):
@@ -88,7 +88,7 @@ def evaluate(args, model=None, data_loader=None):
 
 def _estimate_and_run_metrics(clean, model, noisy, args):
     estimate = get_estimate(model, noisy, args)
-    return _run_metrics(clean, estimate, args, sr=model.sample_rate)
+    return _run_metrics(clean, estimate, args, sr=args.fs)
 
 
 def _run_metrics(clean, estimate, args, sr):

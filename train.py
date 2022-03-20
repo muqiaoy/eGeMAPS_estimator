@@ -14,7 +14,7 @@ import numpy as np
 from glob import glob
 from pathlib import Path
 import shutil
-import opensmile
+# import opensmile
 
 import torch
 import torch.nn as nn
@@ -51,9 +51,9 @@ def main(args):
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
     logging.info(args)
-    smile_F = opensmile.Smile(
-        feature_set=opensmile.FeatureSet.eGeMAPSv02,
-        feature_level=opensmile.FeatureLevel.Functionals)
+    # smile_F = opensmile.Smile(
+    #     feature_set=opensmile.FeatureSet.eGeMAPSv02,
+    #     feature_level=opensmile.FeatureLevel.Functionals)
 
     if args.model == 'NSNet2':
         # raise NotImplementedError
@@ -120,6 +120,7 @@ def main(args):
 
     if torch.cuda.is_available():
         model.cuda()
+        model = nn.DataParallel(model, device_ids=[0, 1])
         if estimator is not None:
             if args.egemaps_type == 'lld':
                 model.fc = nn.Sequential(
@@ -154,8 +155,12 @@ def main(args):
         optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
+    if args.scheduler:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, min_lr=float(args.lr) / 100)
+    else:
+        scheduler = None
         
-    trainer = Trainer(data, model, estimator, optimizer, args)
+    trainer = Trainer(data, model, estimator, optimizer, args, scheduler)
     trainer.train()
 
 

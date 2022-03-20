@@ -3,7 +3,7 @@
 cpu: False
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
 estimatorPath: "exp/VAE/best.th"
-savePath: "exp/Demucs_vae_func_diffweighted_factor1_scheduler_lr1e-3"
+savePath: "exp/Demucs_vae_func_diffweighted_factor100_scheduler"
 seed: 2
 
 
@@ -57,7 +57,7 @@ num_workers: 4
 optim: Adam
 scheduler: True
 loss: l2
-lr: 1.0e-3
+lr: 3.0e-4
 beta2: 0.999
 stft_loss: False
 stft_sc_factor: .5
@@ -66,7 +66,7 @@ stft_mag_factor: .5
 # Egemaps stuff
 egemaps_type: functionals
 egeloss_only: False
-egemaps_factor: 1.
+egemaps_factor: 100
 egemaps_train_path: egemaps_functionals/train1.npy
 egemaps_valid_path: egemaps_functionals/valid1.npy
 egemaps_test_path: egemaps_functionals/test1.npy

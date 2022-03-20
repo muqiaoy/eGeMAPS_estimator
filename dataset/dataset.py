@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import re
-import opensmile
 import librosa
 
 import numpy as np
@@ -103,6 +102,7 @@ class NoisyCleanSet:
         # generate the egemaps features for the 1st time if it does not exist
         if egemaps_path is not None:
             if not os.path.exists(egemaps_path):
+                import opensmile
                 self.smile_F = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
                     feature_level=opensmile.FeatureLevel.Functionals)
@@ -123,6 +123,7 @@ class NoisyCleanSet:
 
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
+                import opensmile
                 self.smile_F = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
                     feature_level=opensmile.FeatureLevel.LowLevelDescriptors)

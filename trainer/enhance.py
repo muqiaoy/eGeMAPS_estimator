@@ -38,6 +38,7 @@ def add_flags(parser):
     parser.add_argument('--device', default="cuda:0")
     parser.add_argument('--dry', type=float, default=0,
                         help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
+    parser.add_argument('--fs', type=float, default=16000)
     parser.add_argument('--num_workers', type=int, default=10)
     parser.add_argument('--streaming', action="store_true",
                         help="true streaming evaluation for Demucs")
@@ -66,10 +67,10 @@ def get_estimate(model, noisy, args):
         raise NotImplementedError
     else:
         with torch.no_grad():
-            if isinstance(model, Demucs):
+            if isinstance(model, Demucs) or isinstance(model.module, Demucs):
                 estimate, _ = model(noisy)
                 estimate = (1 - args.dry) * estimate + args.dry * noisy
-            elif isinstance(model, FullSubNet):
+            elif isinstance(model, FullSubNet) or isinstance(model.module, FullSubNet):
                 # full band crm mask
 
                 noisy_mag, noisy_phase, noisy_real, noisy_imag = model.stft(torch.squeeze(noisy, dim=1))
@@ -139,7 +140,7 @@ def enhance(args, model=None, local_out_dir=None):
     else:
         out_dir = args.out_dir
 
-    dset = get_dataset(args, model.sample_rate)
+    dset = get_dataset(args, args.fs)
     if dset is None:
         return
     loader = distrib.loader(dset, batch_size=1)
@@ -162,7 +163,7 @@ def enhance(args, model=None, local_out_dir=None):
             else:
                 # Forward
                 estimate = get_estimate(model, noisy_signals, args)
-                save_wavs(estimate, noisy_signals, filenames, out_dir, sr=model.sample_rate)
+                save_wavs(estimate, noisy_signals, filenames, out_dir, sr=args.fs)
 
         if pendings:
             print('Waiting for pending jobs...')

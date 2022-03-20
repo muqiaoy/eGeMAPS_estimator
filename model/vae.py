@@ -8,7 +8,7 @@ import torch
 import torchaudio
 import torch.nn as nn
 from torchaudio.pipelines import Wav2Vec2Bundle
-import opensmile
+# import opensmile
 from .Demucs.utils import capture_init
 
 from . import modules as custom_nn
