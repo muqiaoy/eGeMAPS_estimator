@@ -347,8 +347,6 @@ class Trainer(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss
-            if not cross_valid:
-                break
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 
