@@ -11,9 +11,11 @@ from pathlib import Path
 import os
 import time
 import numpy as np
+import functools
 
 import torch
 import torch.nn.functional as F
+import torchaudio
 
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -78,10 +80,12 @@ class Trainer(object):
         self.mrstftloss = MultiResolutionSTFTLoss(factor_sc=args.stft_sc_factor,
                                                   factor_mag=args.stft_mag_factor).to(self.device)
         if args.weightPath is not None:
-            self.weight = torch.from_numpy(np.load(args.weightPath)).cuda()
-            # self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+            self.weight = torch.from_numpy(np.load(args.weightPath)).float().cuda()
+            self.weight = torch.nn.functional.normalize(self.weight, dim=0)
         else:
             self.weight = None
+        window_fn = functools.partial(torch.hann_window, device=self.args.device)
+        self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
         self._reset()
 
     def _serialize(self):
@@ -144,11 +148,11 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
-        logger.info('Enhance and save samples...')
-        out_dir = os.path.join(self.args.savePath, "0")
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
-        enhance(self.args, self.model, out_dir)
+        # logger.info('Enhance and save samples...')
+        # out_dir = os.path.join(self.args.savePath, "0")
+        # if not os.path.exists(out_dir):
+        #     os.makedirs(out_dir)
+        # enhance(self.args, self.model, out_dir)
 
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
@@ -231,16 +235,19 @@ class Trainer(object):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
-            spec = data[3]
-            spec = spec.transpose(1, 2)
+            # spec = data[3]
+            # spec = spec.transpose(1, 2)
             if not cross_valid:
                 sources = torch.stack([noisy - clean, clean])
                 sources = self.augment(sources)
                 noise, clean = sources
                 noisy = noise + clean
+
+            loss = 0.
             if self.args.model == "Demucs":
                 estimate, _ = self.dmodel(noisy)
                 # apply a loss function after each layer
+                input_estimator = estimate
                 with torch.autograd.set_detect_anomaly(True):
                     if self.args.loss == 'l1':
                         loss = F.l1_loss(clean, estimate)
@@ -255,15 +262,18 @@ class Trainer(object):
                         sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
                         loss += sc_loss + mag_loss
             elif self.args.model == "FullSubNet":
-                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.stft(torch.squeeze(noisy))
-                _, _, clean_real, clean_imag = self.dmodel.stft(torch.squeeze(clean))
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.stft(torch.squeeze(noisy, dim=1))
+                _, _, clean_real, clean_imag = self.dmodel.stft(torch.squeeze(clean, dim=1))
                 cIRM = build_complex_ideal_ratio_mask(noisy_real, noisy_imag, clean_real, clean_imag)  # [B, F, T, 2]
-                cIRM = drop_band(
-                    cIRM.permute(0, 3, 1, 2),  # [B, 2, F ,T]
-                    self.dmodel.num_groups_in_drop_band
-                ).permute(0, 2, 3, 1)
+                # print(cIRM.shape)
+                # cIRM = drop_band(
+                #     cIRM.permute(0, 3, 1, 2),  # [B, 2, F ,T]
+                #     self.dmodel.num_groups_in_drop_band
+                # ).permute(0, 2, 3, 1)
+                # print(cIRM.shape)
                 noisy_mag = noisy_mag.unsqueeze(1)
-                cRM = self.dmodel(noisy_mag)
+                cRM = self.dmodel(noisy_mag, dropping_band=False)
+                # print(cRM.shape)
                 cRM = cRM.permute(0, 2, 3, 1)
                 with torch.autograd.set_detect_anomaly(True):
                     if self.args.loss == 'l1':
@@ -272,30 +282,54 @@ class Trainer(object):
                         loss = F.mse_loss(cIRM, cRM)
                     elif self.args.loss == 'huber':
                         loss = F.smooth_l1_loss(cIRM, cRM)
-                    print(loss)
+                    # print(loss)
+                cRM = decompress_cIRM(cRM)
+                noisy_concat = torch.stack([noisy_real, noisy_imag], -1)
+                # noisy_concat = drop_band(
+                #     noisy_concat.permute(0, 3, 1, 2),  # [B, 2, F ,T]
+                #     self.dmodel.num_groups_in_drop_band
+                # ).permute(0, 2, 3, 1)
+                noisy_real = noisy_concat[..., 0]
+                noisy_imag = noisy_concat[..., 0]
+                enhanced_real = cRM[..., 0] * noisy_real - cRM[..., 1] * noisy_imag
+                enhanced_imag = cRM[..., 1] * noisy_real + cRM[..., 0] * noisy_imag
+                # print(enhanced_real.shape)
+                estimate = self.dmodel.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = torch.unsqueeze(estimate, dim=1)
 
             else:
                 raise NotImplementedError
+
+            # print(enhanced_real.shape)
+            # print(enhanced_imag.shape)
+            # print(cRM.shape)
+            # input_spec = torch.from_numpy(librosa.feature.melspectrogram(y=input_estimator.cpu().numpy(), sr=self.args.fs))
+            input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
+
                 
             with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
-                    egemaps_func = data[2]
-                    egemaps_lld = data[4]
-                    encoded_out = self.estimator(spec).encoder_out.global_sample
+                    encoded_out = self.estimator(input_spec).encoder_out.global_sample
                     estimated_egemaps = self.dmodel.fc(encoded_out)
                     if self.args.egemaps_type == "functionals":
+                        egemaps_func = data[2]
                         true_egemaps = egemaps_func
                         if self.weight is not None:
-                            egemaps_loss = torch.norm(self.weight[88:, -1] *estimated_egemaps + self.weight[:88, -1] * egemaps_func)
+                            # egemaps_loss = torch.mean((estimated_egemaps @ self.weight[88:, -1] + egemaps_func @ self.weight[:88, -1]).abs())
+                            egemaps_loss = torch.norm( (estimated_egemaps - egemaps_func) @ self.weight[:, -1])
                         else:
                             egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_func)
 
                     elif self.args.egemaps_type == "lld":
+                        # egemaps_lld = data[4]
                         egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
+                    if not self.args.egeloss_only:
+                        loss += self.args.egemaps_factor * egemaps_loss
+                    else:
+                        loss = egemaps_loss
                     print("*****")
                     print(egemaps_loss)
                     print(loss)
-                    loss += self.args.egemaps_factor * egemaps_loss
 
                 # optimize model in training mode
                 if not cross_valid:

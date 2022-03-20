@@ -14,6 +14,7 @@ import librosa
 
 import numpy as np
 import torch
+import torchaudio
 
 from .audioset import Audioset, find_audio_files
 
@@ -142,10 +143,12 @@ class NoisyCleanSet:
             self.egemaps_lld = torch.nn.functional.normalize(self.egemaps_lld)
 
         if spec_path is not None:
+            spectrogram = torchaudio.transforms.Spectrogram(hop_length=512)
             if not os.path.exists(spec_path):
-                self.spec = torch.zeros(len(self.clean_set), 128, 938 if self.clean_set[0].shape[-1] == 480000 else 313)
+                self.spec = torch.zeros(len(self.clean_set), 201, 938 if self.clean_set[0].shape[-1] == 480000 else 313)
                 for i in range(len(self.clean_set)):
-                    self.spec[i] = torch.from_numpy(librosa.feature.melspectrogram(y=self.clean_set[i].numpy(), sr=sample_rate))
+                    self.spec[i] = spectrogram(self.clean_set[i])
+                    # self.spec[i] = torch.from_numpy(librosa.feature.melspectrogram(y=self.clean_set[i].numpy(), sr=sample_rate))
                 if not os.path.exists("spec"):
                     os.makedirs("spec")
                 np.save(os.path.join("spec", os.path.basename(spec_path)), self.spec.numpy())

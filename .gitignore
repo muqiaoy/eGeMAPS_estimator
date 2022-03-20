@@ -4,6 +4,7 @@ s3prl/
 egemaps_functionals/
 egemaps_lld/
 spec/
+spec_librosa/
 enhanced_audios/
 results_metrics/
 results_dnsmos/

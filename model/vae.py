@@ -60,7 +60,7 @@ class Encoder(nn.Module):
         
         self.global_net = nn.Sequential(
             custom_nn.Transpose((1, 2)),
-            nn.Conv1d(128, z_size//4, kernel_size = 3, stride = 1),
+            nn.Conv1d(201, z_size//4, kernel_size = 3, stride = 1),
             nn.Tanh(),
             
             nn.BatchNorm1d(z_size//4),
@@ -80,7 +80,7 @@ class Encoder(nn.Module):
         
         self.local_net = nn.Sequential(
             custom_nn.Transpose((1, 2)),
-            nn.Conv1d(128+z_size, local_z_size, kernel_size = 1, stride = 1),
+            nn.Conv1d(201+z_size, local_z_size, kernel_size = 1, stride = 1),
             nn.Tanh(),
             nn.BatchNorm1d(local_z_size),
             
@@ -134,19 +134,19 @@ class Decoder(nn.Module):
         
         self.fc = nn.Sequential(
             custom_nn.Transpose((1,2)),
-            nn.Conv1d(local_z_size, 128, kernel_size = 1, stride = 1),
+            nn.Conv1d(local_z_size, 201, kernel_size = 1, stride = 1),
             nn.Tanh(),
-            nn.BatchNorm1d(128),
+            nn.BatchNorm1d(201),
             
-            nn.Conv1d(128, 128, kernel_size = 1, stride = 1),
+            nn.Conv1d(201, 201, kernel_size = 1, stride = 1),
             nn.Tanh(),
-            nn.BatchNorm1d(128),
+            nn.BatchNorm1d(201),
             
-            nn.Conv1d(128, 128, kernel_size = 1, stride = 1),
+            nn.Conv1d(201, 201, kernel_size = 1, stride = 1),
             nn.Tanh(),
-            nn.BatchNorm1d(128),
+            nn.BatchNorm1d(201),
             
-            nn.Conv1d(128, 128, kernel_size=1, stride=1),
+            nn.Conv1d(201, 201, kernel_size=1, stride=1),
             nn.Sigmoid(),
             custom_nn.Transpose((1,2)),
         )

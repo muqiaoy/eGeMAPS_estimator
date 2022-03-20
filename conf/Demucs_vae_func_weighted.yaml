@@ -3,7 +3,7 @@
 cpu: False
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
 estimatorPath: "exp/VAE/best.th"
-savePath: "exp/Demucs_vae_func_weighted"
+savePath: "exp/Demucs_vae_func_diffweighted_backprop"
 seed: 2
 
 
@@ -33,7 +33,8 @@ dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
-weightPath: "weights/dns_train_normalized_fun_ege_weights_raw.npy"
+# weightPath: "weights/dns_train_normalized_fun_ege_weights_raw.npy"
+weightPath: "weights/dns_train_normalized_fun_ege_diff_weights_raw.npy"
 fs: 16000
 segment: 30
 stride: 1    # in seconds, how much to stride between training examples
@@ -63,18 +64,25 @@ stft_mag_factor: .5
 
 # Egemaps stuff
 egemaps_type: functionals
+egeloss_only: False
 egemaps_factor: 1.
 egemaps_train_path: egemaps_functionals/train1.npy
 egemaps_valid_path: egemaps_functionals/valid1.npy
 egemaps_test_path: egemaps_functionals/test1.npy
-egemaps_lld_train_path: egemaps_lld/train1.npy
-egemaps_lld_valid_path: egemaps_lld/valid1.npy
-egemaps_lld_test_path: egemaps_lld/test1.npy
+# egemaps_lld_train_path: egemaps_lld/train1.npy
+# egemaps_lld_valid_path: egemaps_lld/valid1.npy
+# egemaps_lld_test_path: egemaps_lld/test1.npy
+egemaps_lld_train_path: 
+egemaps_lld_valid_path: 
+egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: spec/train1.npy
-spec_valid_path: spec/valid1.npy
-spec_test_path: spec/test1.npy
+# spec_train_path: spec/train1.npy
+# spec_valid_path: spec/valid1.npy
+# spec_test_path: spec/test1.npy
+spec_train_path: 
+spec_valid_path: 
+spec_test_path: 
 
 
 # Logging and printing, and does not impact training
