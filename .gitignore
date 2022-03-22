@@ -9,6 +9,7 @@ enhanced_audios/
 results_metrics/
 results_dnsmos/
 weights/
+results/
 
 # custom scripts
 misc/

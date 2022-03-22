@@ -56,7 +56,7 @@ def main(args):
     #     feature_level=opensmile.FeatureLevel.Functionals)
 
     if args.model == 'NSNet2':
-        # raise NotImplementedError
+        raise NotImplementedError
         model = NSNet2(modelfile=args.modelPath, cfg=args.cfg)
         print(model.model)
         print(type(model.model.Shape_21))
