@@ -1,6 +1,6 @@
 
 # General arguments
-cpu: False
+cpu: false
 modelPath: "pretrained/fullsubnet_best_model_58epochs.tar"
 estimatorPath: "exp/VAE/best.th"
 savePath: "exp/FullSubNet"
@@ -28,10 +28,11 @@ vae:
 
 
 # Data related
-dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
-trainPath: "synthesized"
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
+trainPath: "synthesized_muqiao"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
+weightPath: 
 fs: 16000
 segment: 30
 stride: 1    # in seconds, how much to stride between training examples
@@ -48,7 +49,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 4
+batch_size: 2
 epochs: 10
 num_workers: 4
 optim: Adam
@@ -60,18 +61,26 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff
+egemaps_type: functionals
+egeloss_only: False
 egemaps_factor: 1.
-egemaps_train_path: egemaps_functionals/train.npy
-egemaps_valid_path: egemaps_functionals/valid.npy
-egemaps_test_path: egemaps_functionals/test.npy
-egemaps_lld_train_path: egemaps_lld/train.npy
-egemaps_lld_valid_path: egemaps_lld/valid.npy
-egemaps_lld_test_path: egemaps_lld/test.npy
+egemaps_train_path: egemaps_functionals/train1.npy
+egemaps_valid_path: egemaps_functionals/valid1.npy
+egemaps_test_path: egemaps_functionals/test1.npy
+# egemaps_lld_train_path: egemaps_lld/train1.npy
+# egemaps_lld_valid_path: egemaps_lld/valid1.npy
+# egemaps_lld_test_path: egemaps_lld/test1.npy
+egemaps_lld_train_path: 
+egemaps_lld_valid_path: 
+egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: spec/train.npy
-spec_valid_path: spec/valid.npy
-spec_test_path: spec/test.npy
+# spec_train_path: spec/train1.npy
+# spec_valid_path: spec/valid1.npy
+# spec_test_path: spec/test1.npy
+spec_train_path: 
+spec_valid_path: 
+spec_test_path: 
 
 
 # Logging and printing, and does not impact training
