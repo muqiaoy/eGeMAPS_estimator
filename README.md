@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
     Generating the eGeMAPS feature for the first time could be slow.
     ```
-    python train_est.py --train_config conf/estimator.yaml 
+    python train_est.py --train_config conf/VAE.yaml 
     ```
 
 2. Finetune the enhancement model (only support Demucs / FullSubNet so far).
