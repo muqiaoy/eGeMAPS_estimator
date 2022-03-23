@@ -19,14 +19,14 @@ pip install -r requirements.txt
 
 
 ## Usage
-1. Train the eGeMAPS estimator.
+1. Train the eGeMAPS estimator (only support VAE so far).
 
     Generating the eGeMAPS feature for the first time could be slow.
     ```
     python train_est.py --train_config conf/estimator.yaml 
     ```
 
-2. Finetune the enhancement model (only support Demucs so far).
+2. Finetune the enhancement model (only support Demucs / FullSubNet so far).
     ```
     python train.py --train_config conf/Demucs.yaml
     ```
