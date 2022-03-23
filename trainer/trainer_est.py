@@ -204,6 +204,8 @@ class Trainer_est(object):
 
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
+        
+        i = 0  # step
         for data in tqdm(data_loader):
             data = [x.to(self.device) for x in data]
             clean = data[1]
@@ -236,6 +238,7 @@ class Trainer_est(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss, estimate
+            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 
