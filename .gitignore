@@ -1,4 +1,5 @@
 # experiments related
+pretrained/
 exp/
 s3prl/
 egemaps_functionals/
@@ -13,6 +14,7 @@ results/
 
 # custom scripts
 misc/
+test.py
 
 
 # Byte-compiled / optimized / DLL files

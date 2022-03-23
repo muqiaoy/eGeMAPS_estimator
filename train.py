@@ -14,13 +14,12 @@ import numpy as np
 from glob import glob
 from pathlib import Path
 import shutil
-# import opensmile
 
 import torch
 import torch.nn as nn
 
 from model import *
-from model.egemaps_estimator import Egemaps_estimator, SelfAttentionPooling
+from model.egemaps_estimator import SelfAttentionPooling
 from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
@@ -51,49 +50,37 @@ def main(args):
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
     logging.info(args)
-    # smile_F = opensmile.Smile(
-    #     feature_set=opensmile.FeatureSet.eGeMAPSv02,
-    #     feature_level=opensmile.FeatureLevel.Functionals)
 
     if args.model == 'NSNet2':
         raise NotImplementedError
-        model = NSNet2(modelfile=args.modelPath, cfg=args.cfg)
-        print(model.model)
-        print(type(model.model.Shape_21))
-        for n, v in model.state_dict().items():
-            print(n)
-            print(v.shape)
-        logging.info("Loaded checkpoint from %s" % args.modelPath)
+
     elif args.model == 'Demucs':
         model = Demucs(**args.demucs, sample_rate=args.fs)
         state_dict = torch.load(args.modelPath)
         model.load_state_dict(state_dict)
 
-        if args.estimatorPath is not None:
-            # estimator = Egemaps_estimator(smile_F=smile_F)
-            estimator = VAE(**args.vae)
-            package = torch.load(args.estimatorPath)
-            estimator.load_state_dict(package['state'], strict=False)
-            logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
-        else:
-            estimator = None
-            logging.info("Loaded checkpoint from %s" % (args.modelPath))
 
     elif args.model == 'FullSubNet':
         model = FullSubNet(**args.fullsubnet, sample_rate=args.fs)
         state_dict = torch.load(args.modelPath)["model"]
         model.load_state_dict(state_dict)
-        if args.estimatorPath is not None:
-            # estimator = Egemaps_estimator(smile_F=smile_F)
-            estimator = VAE(**args.vae)
-            package = torch.load(args.estimatorPath)
-            estimator.load_state_dict(package['state'], strict=False)
-            logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
-        else:
-            estimator = None
-            logging.info("Loaded checkpoint from %s" % (args.modelPath))
+
+    elif args.model == 'ConvTasNet':
+        model = ConvTasNet(**args.convtasnet, sample_rate=args.fs)
+        state_dict = torch.load(args.modelPath)
+        model.load_state_dict(state_dict)
+
     else:
         raise NotImplementedError(args.model)
+
+    if args.estimatorPath is not None:
+        estimator = VAE(**args.vae)
+        package = torch.load(args.estimatorPath)
+        estimator.load_state_dict(package['state'], strict=False)
+        logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
+    else:
+        estimator = None
+        logging.info("Loaded checkpoint from %s" % (args.modelPath))
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
@@ -120,7 +107,7 @@ def main(args):
 
     if torch.cuda.is_available():
         model.cuda()
-        model = nn.DataParallel(model, device_ids=[0, 1])
+        model = nn.DataParallel(model, device_ids=list(range(args.ngpu)))
         if estimator is not None:
             if args.egemaps_type == 'lld':
                 model.fc = nn.Sequential(
@@ -182,7 +169,9 @@ if __name__ == "__main__":
         args = argparse.Namespace()
         args.__dict__.update(yaml.load(f, Loader=yaml.FullLoader))
         args.__dict__.update(conf_args.__dict__)
-        args.device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+        args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if args.ngpu == -1:
+            args.ngpu = torch.cuda.device_count()
 
     # print(args)
     set_seed(args.seed)

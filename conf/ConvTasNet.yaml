@@ -1,28 +1,41 @@
 
 # General arguments
-cpu: false
-modelPath: "pretrained/ConvTasNet.th"
+ngpu: -1
+modelPath: "pretrained/ConvTasNet.pth"
 estimatorPath: "exp/VAE/best.th"
 savePath: "exp/ConvTasNet"
 seed: 2
 
 
 # Model related
-model: Demucs
-demucs:
-    chin: 1
-    chout: 1
-    hidden: 64
-    max_hidden: 10000
-    causal: true
-    glu: true
-    depth: 5
-    kernel_size: 8
-    stride: 4
-    normalize: true
-    resample: 4
-    growth: 2
-    rescale: 0.1
+model: ConvTasNet
+convtasnet:
+    encoder_conf:
+        channel: 256
+        kernel_size: 20
+        stride: 10
+    decoder_conf:
+        channel: 256
+        kernel_size: 20
+        stride: 10
+    separator_conf:
+        input_dim: 256
+        num_spk: 1
+        layer: 8
+        stack: 4
+        bottleneck_dim: 256
+        hidden_dim: 512
+        kernel: 3
+        causal: False
+        norm_type: "gLN"
+        nonlinear: relu
+    criterions:
+        conf:
+            eps: 1.0e-7
+        wrapper: pit
+        wrapper_conf:
+            weight: 1.0
+            independent_perm: True
 vae:
     z_size: 256
     local_z_size: 256
@@ -30,7 +43,7 @@ vae:
 
 # Data related
 dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
-trainPath: "synthesized_muqiao"
+trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: 
@@ -66,20 +79,20 @@ stft_mag_factor: .5
 egemaps_type: functionals
 egeloss_only: false
 egemaps_factor: 1.
-egemaps_train_path: egemaps_functionals/train1.npy
-egemaps_valid_path: egemaps_functionals/valid1.npy
-egemaps_test_path: egemaps_functionals/test1.npy
-# egemaps_lld_train_path: egemaps_lld/train1.npy
-# egemaps_lld_valid_path: egemaps_lld/valid1.npy
-# egemaps_lld_test_path: egemaps_lld/test1.npy
+egemaps_train_path: egemaps_functionals/train_joseph.npy
+egemaps_valid_path: egemaps_functionals/valid_joseph.npy
+egemaps_test_path: egemaps_functionals/test_joseph.npy
+# egemaps_lld_train_path: egemaps_lld/train_joseph.npy
+# egemaps_lld_valid_path: egemaps_lld/valid_joseph.npy
+# egemaps_lld_test_path: egemaps_lld/test_joseph.npy
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 
 
 # Spec stuff
-# spec_train_path: spec/train1.npy
-# spec_valid_path: spec/valid1.npy
-# spec_test_path: spec/test1.npy
+# spec_train_path: spec/train_joseph.npy
+# spec_valid_path: spec/valid_joseph.npy
+# spec_test_path: spec/test_joseph.npy
 spec_train_path: 
 spec_valid_path: 
 spec_test_path: 

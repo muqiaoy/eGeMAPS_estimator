@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import librosa
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -102,12 +103,13 @@ class NoisyCleanSet:
         # generate the egemaps features for the 1st time if it does not exist
         if egemaps_path is not None:
             if not os.path.exists(egemaps_path):
+                print("eGeMAPS functionals do not exist. Generating... This might take a while")
                 import opensmile
                 self.smile_F = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
                     feature_level=opensmile.FeatureLevel.Functionals)
                 self.egemaps = torch.zeros(len(self.clean_set), len(self.smile_F.feature_names))
-                for i in range(len(self.clean_set)):
+                for i in tqdm(range(len(self.clean_set))):
                     self.egemaps[i] = torch.from_numpy(self.smile_F.process_signal(self.clean_set[i], sampling_rate=sample_rate).values)
                 if not os.path.exists("egemaps_functionals"):
                     os.makedirs("egemaps_functionals")
@@ -123,13 +125,14 @@ class NoisyCleanSet:
 
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
+                print("eGeMAPS LLDs do not exist. Generating... This might take a while")
                 import opensmile
                 self.smile_F = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
                     feature_level=opensmile.FeatureLevel.LowLevelDescriptors)
                 # print(self.clean_set[0].shape[-1] // 160 - 4)
                 self.egemaps_lld = torch.zeros(len(self.clean_set), self.clean_set[0].shape[-1] // 160 - 4, len(self.smile_F.feature_names))
-                for i in range(len(self.clean_set)):
+                for i in tqdm(range(len(self.clean_set))):
                     self.egemaps_lld[i] = torch.from_numpy(self.smile_F.process_signal(self.clean_set[i], sampling_rate=sample_rate).values)
                 if not os.path.exists("egemaps_lld"):
                     os.makedirs("egemaps_lld")
@@ -146,8 +149,9 @@ class NoisyCleanSet:
         if spec_path is not None:
             spectrogram = torchaudio.transforms.Spectrogram(hop_length=512)
             if not os.path.exists(spec_path):
+                print("specrograms do not exist. Generating... This might take a while")
                 self.spec = torch.zeros(len(self.clean_set), 201, 938 if self.clean_set[0].shape[-1] == 480000 else 313)
-                for i in range(len(self.clean_set)):
+                for i in tqdm(range(len(self.clean_set))):
                     self.spec[i] = spectrogram(self.clean_set[i])
                     # self.spec[i] = torch.from_numpy(librosa.feature.melspectrogram(y=self.clean_set[i].numpy(), sr=sample_rate))
                 if not os.path.exists("spec"):

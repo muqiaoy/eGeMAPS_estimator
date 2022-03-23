@@ -13,12 +13,10 @@ import numpy as np
 from glob import glob
 from pathlib import Path
 import shutil
-import opensmile
 
 import torch
 
 from model import *
-from model.egemaps_estimator import Egemaps_estimator
 from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
@@ -48,17 +46,12 @@ def main(args):
                 shutil.move(p, pn)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
-    smile_F = opensmile.Smile(
-        feature_set=opensmile.FeatureSet.eGeMAPSv02,
-        feature_level=opensmile.FeatureLevel.Functionals)
 
-    if args.model == 'estimator':
-        estimator = Egemaps_estimator()
-    elif args.model == 'VAE':
+    if args.model == 'VAE':
         estimator = VAE(**args.vae)
 
     else:
-        raise NotImplementedError(feat_dim=args.egemaps_dim)
+        raise NotImplementedError(args.model)
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
@@ -113,7 +106,9 @@ if __name__ == "__main__":
         args = argparse.Namespace()
         args.__dict__.update(yaml.load(f, Loader=yaml.FullLoader))
         args.__dict__.update(conf_args.__dict__)
-        args.device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+        args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if args.ngpu == -1:
+            args.ngpu = torch.cuda.device_count()
 
     print(args)
     set_seed(args.seed)

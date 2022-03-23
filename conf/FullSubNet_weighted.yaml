@@ -1,6 +1,6 @@
 
 # General arguments
-cpu: false
+ngpu: -1
 modelPath: "pretrained/fullsubnet_best_model_58epochs.tar"
 estimatorPath: "exp/VAE/best.th"
 savePath: "exp/FullSubNet_weighted"
@@ -29,7 +29,7 @@ vae:
 
 # Data related
 dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
-trainPath: "synthesized_muqiao"
+trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: "weights/dns_train_normalized_fun_ege_diff_weights_raw.npy"
@@ -49,10 +49,11 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 2
+batch_size: 4
 epochs: 10
 num_workers: 4
 optim: Adam
+scheduler: false
 loss: l2
 lr: 5.0e-4
 beta2: 0.999

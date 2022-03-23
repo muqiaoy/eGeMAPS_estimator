@@ -1,6 +1,6 @@
 
 # General arguments
-cpu: False
+ngpu: -1
 savePath: "exp/VAE"
 seed: 2
 
@@ -26,8 +26,8 @@ vae:
 
 
 # Data related
-dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
-trainPath: "synthesized"
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
+trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 fs: 16000
@@ -58,14 +58,14 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff (ms)
-egemaps_train_path: egemaps_functionals/train.npy
-egemaps_valid_path: egemaps_functionals/valid.npy
-egemaps_test_path: egemaps_functionals/test.npy
+egemaps_train_path: egemaps_functionals/train_joseph.npy
+egemaps_valid_path: egemaps_functionals/valid_joseph.npy
+egemaps_test_path: egemaps_functionals/test_joseph.npy
 
 # Spec stuff
-spec_train_path: spec/train.npy
-spec_valid_path: spec/valid.npy
-spec_test_path: spec/test.npy
+spec_train_path: spec/train_joseph.npy
+spec_valid_path: spec/valid_joseph.npy
+spec_test_path: spec/test_joseph.npy
 
 
 # Logging and printing, and does not impact training

@@ -13,6 +13,7 @@ import os
 import sys
 
 import torch
+import torch.nn as nn
 import torchaudio
 
 import os,sys,inspect
@@ -35,7 +36,7 @@ def add_flags(parser):
     Add the flags for the argument parser that are related to model loading and evaluation"
     """
     load_pretrained.add_model_flags(parser)
-    parser.add_argument('--device', default="cuda:0")
+    parser.add_argument('--ngpus', default="1")
     parser.add_argument('--dry', type=float, default=0,
                         help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
     parser.add_argument('--fs', type=float, default=16000)
@@ -67,24 +68,27 @@ def get_estimate(model, noisy, args):
         raise NotImplementedError
     else:
         with torch.no_grad():
-            if isinstance(model, Demucs) or isinstance(model.module, Demucs):
+            if isinstance(model.module, Demucs):
                 estimate, _ = model(noisy)
                 estimate = (1 - args.dry) * estimate + args.dry * noisy
-            elif isinstance(model, FullSubNet) or isinstance(model.module, FullSubNet):
+            elif isinstance(model.module, FullSubNet):
                 # full band crm mask
 
-                noisy_mag, noisy_phase, noisy_real, noisy_imag = model.stft(torch.squeeze(noisy, dim=1))
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = model.module.stft(torch.squeeze(noisy, dim=1))
 
                 noisy_mag = noisy_mag.unsqueeze(1)
-                pred_crm = model(noisy_mag, dropping_band=False)
+                pred_crm = model(noisy_mag=noisy_mag, dropping_band=False)
                 pred_crm = pred_crm.permute(0, 2, 3, 1)
 
                 pred_crm = decompress_cIRM(pred_crm)
                 enhanced_real = pred_crm[..., 0] * noisy_real - pred_crm[..., 1] * noisy_imag
                 enhanced_imag = pred_crm[..., 1] * noisy_real + pred_crm[..., 0] * noisy_imag
-                estimate = model.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = model.module.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
                 estimate = torch.unsqueeze(estimate, dim=1)
                 # estimate = enhanced.detach().squeeze(0).cpu().numpy()
+            elif isinstance(model.module, ConvTasNet):
+                estimate, _ = model.module.enhance(noisy)
+            
             else:
                 raise NotImplementedError
     return estimate
@@ -133,7 +137,9 @@ def _estimate_and_save(model, noisy_signals, filenames, out_dir, args):
 def enhance(args, model=None, local_out_dir=None):
     # Load model
     if not model:
-        model = load_pretrained.get_model(args).to(args.device)
+        model = load_pretrained.get_model(args)
+    if not isinstance(model, torch.nn.DataParallel):
+        model = nn.DataParallel(model, device_ids=list(range(args.ngpu)))
     model.eval()
     if local_out_dir:
         out_dir = local_out_dir
@@ -155,8 +161,8 @@ def enhance(args, model=None, local_out_dir=None):
         for data in iterator:
             # Get batch data
             noisy_signals, filenames = data
-            noisy_signals = noisy_signals.to(args.device)
-            if args.device == 'cpu' and args.num_workers > 1:
+            noisy_signals = noisy_signals.cuda()
+            if args.ngpu == 0 and args.num_workers > 1:
                 pendings.append(
                     pool.submit(_estimate_and_save,
                                 model, noisy_signals, filenames, out_dir, args))

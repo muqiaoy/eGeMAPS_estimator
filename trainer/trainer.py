@@ -12,6 +12,7 @@ import os
 import time
 import numpy as np
 import functools
+from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
@@ -235,7 +236,9 @@ class Trainer(object):
         label = ["Train", "Valid"][cross_valid]
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
-        for i, data in enumerate(logprog):
+
+        i = 0  # step
+        for data in tqdm(data_loader):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
@@ -266,18 +269,15 @@ class Trainer(object):
                         sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
                         loss += sc_loss + mag_loss
             elif self.args.model == "FullSubNet":
-                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.stft(torch.squeeze(noisy, dim=1))
-                _, _, clean_real, clean_imag = self.dmodel.stft(torch.squeeze(clean, dim=1))
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.module.stft(torch.squeeze(noisy, dim=1))
+                _, _, clean_real, clean_imag = self.dmodel.module.stft(torch.squeeze(clean, dim=1))
                 cIRM = build_complex_ideal_ratio_mask(noisy_real, noisy_imag, clean_real, clean_imag)  # [B, F, T, 2]
-                # print(cIRM.shape)
                 # cIRM = drop_band(
                 #     cIRM.permute(0, 3, 1, 2),  # [B, 2, F ,T]
                 #     self.dmodel.num_groups_in_drop_band
                 # ).permute(0, 2, 3, 1)
-                # print(cIRM.shape)
                 noisy_mag = noisy_mag.unsqueeze(1)
-                cRM = self.dmodel(noisy_mag, dropping_band=False)
-                # print(cRM.shape)
+                cRM = self.dmodel(noisy_mag=noisy_mag, dropping_band=False)
                 cRM = cRM.permute(0, 2, 3, 1)
                 with torch.autograd.set_detect_anomaly(True):
                     if self.args.loss == 'l1':
@@ -297,17 +297,12 @@ class Trainer(object):
                 noisy_imag = noisy_concat[..., 0]
                 enhanced_real = cRM[..., 0] * noisy_real - cRM[..., 1] * noisy_imag
                 enhanced_imag = cRM[..., 1] * noisy_real + cRM[..., 0] * noisy_imag
-                # print(enhanced_real.shape)
-                estimate = self.dmodel.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = self.dmodel.module.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
                 estimate = torch.unsqueeze(estimate, dim=1)
 
             else:
                 raise NotImplementedError
 
-            # print(enhanced_real.shape)
-            # print(enhanced_imag.shape)
-            # print(cRM.shape)
-            # input_spec = torch.from_numpy(librosa.feature.melspectrogram(y=input_estimator.cpu().numpy(), sr=self.args.fs))
             input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
 
                 
@@ -331,9 +326,6 @@ class Trainer(object):
                         loss += self.args.egemaps_factor * egemaps_loss
                     else:
                         loss = egemaps_loss
-                    print("*****")
-                    print(egemaps_loss)
-                    print(loss)
                     if self.scheduler is not None:
                         self.scheduler.step(loss)
 
@@ -347,6 +339,7 @@ class Trainer(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss
+            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 

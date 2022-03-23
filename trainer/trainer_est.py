@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 import os
 import time
+from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
@@ -203,7 +204,7 @@ class Trainer_est(object):
 
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
-        for i, data in enumerate(logprog):
+        for data in tqdm(data_loader):
             data = [x.to(self.device) for x in data]
             clean = data[1]
             egemaps = data[2]
@@ -222,7 +223,6 @@ class Trainer_est(object):
                 #     raise ValueError(f"Invalid loss {self.args.loss}")
                 losses = self.mi_loss(spec, estimate, beta_kl=1., beta_mi=1.)
                 loss = losses.loss
-                print(loss)
 
                 # MultiResolution STFT loss
 
@@ -248,14 +248,10 @@ class Trainer_est(object):
         data_prop = torch.distributions.Normal(reconstruction, 0.01*torch.ones(reconstruction.size()).cuda())
         prior_ll = torch.mean(prior.log_prob(local_sample))
 
-        # repeat global sample)
-        # global_sample_repeated  = global_sample.unsqueeze(1).repeat(1,local_sample.size(1),1)
         global_sample_repeated = global_sample
         
         z_prediction_ll = torch.mean(outputs.predictor_out.log_prob(global_sample_repeated))
         
-        # print(reconstruction)
-        # print(input)
         reconstruction_ll = -(F.mse_loss(reconstruction, input, size_average=False)/(input.size(0)))/input.size(1)
         
         z_local_entropy = -torch.mean(outputs.encoder_out.local_dist.log_prob(local_sample))
