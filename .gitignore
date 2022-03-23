@@ -2,8 +2,8 @@
 pretrained/
 exp/
 s3prl/
-egemaps_functionals/
-egemaps_lld/
+egemaps_funcs/
+egemaps_llds/
 spec/
 spec_librosa/
 enhanced_audios/

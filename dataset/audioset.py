@@ -11,6 +11,9 @@ from pathlib import Path
 import math
 import os
 import sys
+import multiprocessing
+from tqdm import tqdm
+import numpy as np
 
 import torchaudio
 from torch.nn import functional as F
@@ -49,10 +52,54 @@ def find_audio_files(path, exts=[".wav"], progress=True):
     return meta
 
 
+def get_egemap(file, file_length, examples, output_path, smile, length, stride, sample_rate, level):
+
+    num_frames = 0
+    offset = 0
+    if level == 'func':
+        egemaps = np.zeros((examples, len(smile.feature_names)))
+    elif level == 'lld':
+        if length is not None:
+            egemaps = np.zeros((examples, length // 160 - 4, len(smile.feature_names)))
+        else:
+            egemaps = np.zeros((examples, file_length // 160 - 4, len(smile.feature_names)))
+    else:
+        raise NotImplementedError
+    for seg_idx in range(examples):
+        if length is not None:
+            offset = stride * seg_idx
+            num_frames = length
+        if torchaudio.get_audio_backend() in ['soundfile', 'sox_io']:
+            seg, sr = torchaudio.load(str(file),
+                                    frame_offset=offset,
+                                    num_frames=num_frames or -1)
+        else:
+            seg, sr = torchaudio.load(str(file), offset=offset, num_frames=num_frames)
+        egemaps[seg_idx] = smile.process_signal(seg, sampling_rate=sample_rate).values
+    np.save(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps_lld)
+
+
+def execute_multiprocess(files, num_examples, output_path, smile, length, stride, sample_rate, level):
+    
+    PROCESSES = 32
+    
+    with multiprocessing.Pool(PROCESSES) as pool:
+        
+        # wav_ids = [wav_id for wav_id in sorted(os.listdir(input_dir))]
+        in_args = [(file, file_length, examples, output_path, smile, length, stride, sample_rate, level) for (file, file_length), examples in zip(files, num_examples)]
+        
+        jobs = [pool.apply_async(get_egemap, in_arg) for in_arg in in_args]
+        
+        for j in tqdm(jobs):
+            j.get()
+            
+    return None
+
+
 class Audioset:
     def __init__(self, files=None, length=None, stride=None,
                  pad=True, with_path=False, sample_rate=None,
-                 channels=None, convert=False):
+                 channels=None, convert=False, egemaps_path=None, egemaps_lld_path=None, spec_path=None):
         """
         files should be a list [(file, length)]
         """
@@ -74,6 +121,86 @@ class Audioset:
             else:
                 examples = (file_length - self.length) // self.stride + 1
             self.num_examples.append(examples)
+
+        
+        # generate the egemaps features for the 1st time if it does not exist
+        if egemaps_lld_path is not None:
+            if not os.path.exists(egemaps_lld_path):
+                print("eGeMAPS LLDs do not exist. Generating... This might take a while")
+                os.makedirs(egemaps_lld_path)
+                import opensmile
+                smile_lld = opensmile.Smile(
+                    feature_set=opensmile.FeatureSet.eGeMAPSv02,
+                    feature_level=opensmile.FeatureLevel.LowLevelDescriptors)
+                execute_multiprocess(self.files, self.num_examples, egemaps_lld_path, smile_lld, self.length, self.stride, self.sample_rate, level='lld')
+                # for (file, file_length), examples in tqdm(zip(self.files, self.num_examples), total=len(self.files)):
+                #     num_frames = 0
+                #     offset = 0
+                #     if self.length is not None:
+                #         egemaps_lld = np.zeros((examples, self.length // 160 - 4, len(smile_lld.feature_names)))
+                #     else:
+                #         egemaps_lld = np.zeros((examples, file_length // 160 - 4, len(smile_lld.feature_names)))
+                #     for seg_idx in range(examples):
+                #         if self.length is not None:
+                #             offset = self.stride * seg_idx
+                #             num_frames = self.length
+                #         if torchaudio.get_audio_backend() in ['soundfile', 'sox_io']:
+                #             seg, sr = torchaudio.load(str(file),
+                #                                     frame_offset=offset,
+                #                                     num_frames=num_frames or -1)
+                #         else:
+                #             seg, sr = torchaudio.load(str(file), offset=offset, num_frames=num_frames)
+                #         egemaps_lld[seg_idx] = smile_lld.process_signal(seg, sampling_rate=sample_rate).values
+                #     np.save(os.path.join(egemaps_lld_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps_lld)
+
+        if egemaps_path is not None:
+            if not os.path.exists(egemaps_path):
+                print("eGeMAPS functionals do not exist. Generating... This might take a while")
+                os.makedirs(egemaps_path)
+                import opensmile
+                smile_func = opensmile.Smile(
+                    feature_set=opensmile.FeatureSet.eGeMAPSv02,
+                    feature_level=opensmile.FeatureLevel.Functionals)
+                execute_multiprocess(self.files, self.num_examples, egemaps_path, smile_func, self.length, self.stride, self.sample_rate, level='func')
+                # for (file, _), examples in tqdm(zip(self.files, self.num_examples), total=len(self.files)):
+                #     num_frames = 0
+                #     offset = 0
+                #     egemaps_func = np.zeros((examples, len(smile_func.feature_names)))
+                #     for seg_idx in range(examples):
+                #         if self.length is not None:
+                #             offset = self.stride * seg_idx
+                #             num_frames = self.length
+                #         if torchaudio.get_audio_backend() in ['soundfile', 'sox_io']:
+                #             seg, sr = torchaudio.load(str(file),
+                #                                     frame_offset=offset,
+                #                                     num_frames=num_frames or -1)
+                #         else:
+                #             seg, sr = torchaudio.load(str(file), offset=offset, num_frames=num_frames)
+                #         egemaps_func[seg_idx] = smile_func.process_signal(seg, sampling_rate=sample_rate).values
+                #     np.save(os.path.join(egemaps_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps_func)
+
+
+        if spec_path is not None:
+            spectrogram = torchaudio.transforms.Spectrogram(hop_length=512)
+            raise NotImplementedError
+            # if not os.path.exists(spec_path):
+            #     print("specrograms do not exist. Generating... This might take a while")
+            #     self.spec = torch.zeros(len(self.clean_set), 201, 938 if self.clean_set[0].shape[-1] == 480000 else 313)
+            #     for i in tqdm(range(len(self.clean_set))):
+            #         self.spec[i] = spectrogram(self.clean_set[i])
+            #         # self.spec[i] = torch.from_numpy(librosa.feature.melspectrogram(y=self.clean_set[i].numpy(), sr=sample_rate))
+            #     if not os.path.exists("spec"):
+            #         os.makedirs("spec")
+            #     np.save(os.path.join("spec", os.path.basename(spec_path)), self.spec.numpy())
+            # else:
+            #     self.spec = torch.from_numpy(np.load(spec_path))
+            #     if num_files is not None and num_files < len(self.spec):
+            #         self.spec = self.spec[:num_files]
+            #     assert len(self.spec) == len(self.clean_set), \
+            #         "There is a mismatch between the length of the saved spectrograms (%s) and the dataset (%s). You may want to regenerate the features." % (len(self.spec), len(self.clean_set))
+
+
+            self.spec = torch.nn.functional.normalize(self.spec)
 
     def __len__(self):
         return sum(self.num_examples)
