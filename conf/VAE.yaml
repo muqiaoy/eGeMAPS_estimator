@@ -58,9 +58,9 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff (ms)
-egemaps_train_path: egemaps_functionals/train_joseph.npy
-egemaps_valid_path: egemaps_functionals/valid_joseph.npy
-egemaps_test_path: egemaps_functionals/test_joseph.npy
+egemaps_train_path: 
+egemaps_valid_path:
+egemaps_test_path: 
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 

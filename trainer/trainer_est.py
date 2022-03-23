@@ -77,7 +77,10 @@ class Trainer_est(object):
 
     def _serialize(self):
         package = {}
-        package['model'] = serialize_model(self.model)
+        if isinstance(self.model, torch.nn.DataParallel):
+            package['model'] = serialize_model(self.model.module)
+        else:
+            package['model'] = serialize_model(self.model)
         package['optimizer'] = self.optimizer.state_dict()
         package['history'] = self.history
         package['best_state'] = self.best_state
@@ -205,13 +208,15 @@ class Trainer_est(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
         
-        i = 0  # step
-        for data in tqdm(data_loader):
+        for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
+            noisy = data[0]
             clean = data[1]
-            egemaps = data[2]
+            egemaps_func = data[2].squeeze(1).float()
+            # egemaps_func = torch.rand(256, 88).cuda()
             if self.args.model == "VAE":
-                spec = data[3]
+                raise NotImplementedError
+                spec = data[4]
                 spec = spec.transpose(1, 2)
                 estimate = self.dmodel(spec)
                 # apply a loss function after each layer
@@ -227,8 +232,8 @@ class Trainer_est(object):
                 loss = losses.loss
             
             elif self.args.model == 'M5':
-                estimate = self.dmodel(clean)
-                loss = F.mse_loss(estimate, egemaps)
+                estimate = self.dmodel(noisy)
+                loss = F.mse_loss(estimate, egemaps_func)
             else:
                 raise NotImplementedError
 
@@ -243,7 +248,6 @@ class Trainer_est(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss, estimate
-            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 

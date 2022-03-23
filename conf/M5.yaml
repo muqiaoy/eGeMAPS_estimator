@@ -1,6 +1,6 @@
 
 # General arguments
-ngpu: -1
+ngpu: 4
 savePath: "exp/M5"
 seed: 2
 
@@ -13,7 +13,7 @@ m5:
 
 
 # Data related
-dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
@@ -33,7 +33,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 16
+batch_size: 8192
 epochs: 50
 num_workers: 4
 optim: Adam
@@ -48,9 +48,9 @@ stft_mag_factor: .5
 egemaps_train_path: egemaps_funcs/train
 egemaps_valid_path: egemaps_funcs/valid
 egemaps_test_path: egemaps_funcs/test
-egemaps_lld_train_path: egemaps_llds/train
-egemaps_lld_valid_path: egemaps_llds/valid
-egemaps_lld_test_path: egemaps_llds/test
+egemaps_lld_train_path: 
+egemaps_lld_valid_path: 
+egemaps_lld_test_path: 
 
 # Spec stuff
 spec_train_path:

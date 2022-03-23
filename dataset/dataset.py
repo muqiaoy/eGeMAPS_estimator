@@ -92,7 +92,7 @@ class NoisyCleanSet:
             with open(noisy_json, 'w') as f:
                 json.dump(noisy, f)
             with open(clean_json, 'w') as f:
-                json.dump(noisy, f)
+                json.dump(clean, f)
 
         with open(noisy_json, 'r') as f:
             noisy = json.load(f)
@@ -100,11 +100,12 @@ class NoisyCleanSet:
             clean = json.load(f)
 
         match_files(noisy, clean, matching)
-        kw = {'length': length, 'stride': stride, 'pad': pad, 'sample_rate': sample_rate, 'egemaps_path': egemaps_path, 'egemaps_lld_path': egemaps_lld_path, 'spec_path': spec_path}
+        kw = {'length': length, 'stride': stride, 'pad': pad, 'sample_rate': sample_rate}
+        kw_ege = {'egemaps_path': egemaps_path, 'egemaps_lld_path': egemaps_lld_path, 'spec_path': spec_path}
         if num_files is not None and num_files < len(noisy):
             noisy = noisy[:num_files]
             clean = clean[:num_files]
-        self.clean_set = Audioset(clean, **kw)
+        self.clean_set = Audioset(clean, **kw, **kw_ege)
         self.noisy_set = Audioset(noisy, **kw)
 
         # If egemaps_path is not None, __getitem__() will output one more object which is the egemaps features
@@ -115,8 +116,10 @@ class NoisyCleanSet:
         assert len(self.clean_set) == len(self.noisy_set)
 
     def __getitem__(self, index):
+        noisy, _, _ = self.noisy_set[index]
+        clean, egemaps_func, egemaps_lld = self.clean_set[index]
         
-        return self.noisy_set[index], self.clean_set[index], self.egemaps[index] if self.egemaps_path is not None else torch.Tensor([-1]), self.spec[index] if self.spec_path is not None else torch.Tensor([-1]), self.egemaps_lld[index] if self.egemaps_lld_path is not None else torch.Tensor([-1])
+        return noisy, clean, egemaps_func, egemaps_lld
 
     def __len__(self):
         return len(self.noisy_set)

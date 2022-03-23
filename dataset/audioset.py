@@ -17,6 +17,7 @@ from glob import glob
 import numpy as np
 
 import torchaudio
+import torch
 from torch.nn import functional as F
 
 from .dsp import convert_audio
@@ -99,7 +100,7 @@ def execute_multiprocess(files, num_examples, output_path, smile, length, stride
 
 class Audioset:
     def __init__(self, files=None, length=None, stride=None,
-                 pad=True, with_path=False, sample_rate=None,
+                 pad=True, sample_rate=None,
                  channels=None, convert=False, egemaps_path=None, egemaps_lld_path=None, spec_path=None):
         """
         files should be a list [(file, length)]
@@ -108,7 +109,6 @@ class Audioset:
         self.num_examples = []
         self.length = length
         self.stride = stride or length
-        self.with_path = with_path
         self.sample_rate = sample_rate
         self.channels = channels
         self.convert = convert
@@ -124,6 +124,8 @@ class Audioset:
             self.num_examples.append(examples)
 
         
+        self.egemaps_path = egemaps_path
+        self.egemaps_lld_path = egemaps_lld_path
         # generate the egemaps features for the 1st time if it does not exist
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
@@ -237,10 +239,19 @@ class Audioset:
                                        f"{target_channels}, but got {sr}")
             if num_frames:
                 out = F.pad(out, (0, num_frames - out.shape[-1]))
-            if self.with_path:
-                return out, file
+
+
+            if self.egemaps_path is not None:
+                egemaps_func = torch.from_numpy(np.load(os.path.join(self.egemaps_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1])
+                egemaps_func = F.normalize(egemaps_func)
             else:
-                return out
+                egemaps_func = torch.Tensor([-1])
+            if self.egemaps_lld_path is not None:
+                egemaps_lld = torch.from_numpy(np.load(os.path.join(self.egemaps_lld_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1])
+                egemaps_lld = F.normalize(egemaps_lld)
+            else:
+                egemaps_lld = torch.Tensor([-1])
+            return out, egemaps_func, egemaps_lld
 
 
 if __name__ == "__main__":

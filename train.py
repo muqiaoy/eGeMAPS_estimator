@@ -75,7 +75,10 @@ def main(args):
         raise NotImplementedError(args.model)
 
     if args.estimatorPath is not None:
-        estimator = VAE(**args.vae)
+        if args.estimator == 'VAE':
+            estimator = VAE(**args.vae)
+        elif args.estimator == 'M5':
+            estimator = M5(**args.m5)
         package = torch.load(args.estimatorPath)
         estimator.load_state_dict(package['state'], strict=False)
         logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))

@@ -238,8 +238,7 @@ class Trainer(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
 
-        i = 0  # step
-        for data in tqdm(data_loader):
+        for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
@@ -345,7 +344,6 @@ class Trainer(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss
-            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 
