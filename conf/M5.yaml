@@ -13,7 +13,7 @@ m5:
 
 
 # Data related
-dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"

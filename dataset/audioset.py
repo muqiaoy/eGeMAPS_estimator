@@ -13,6 +13,7 @@ import os
 import sys
 import multiprocessing
 from tqdm import tqdm
+from glob import glob
 import numpy as np
 
 import torchaudio
@@ -76,7 +77,7 @@ def get_egemap(file, file_length, examples, output_path, smile, length, stride, 
         else:
             seg, sr = torchaudio.load(str(file), offset=offset, num_frames=num_frames)
         egemaps[seg_idx] = smile.process_signal(seg, sampling_rate=sample_rate).values
-    np.save(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps_lld)
+    np.save(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps)
 
 
 def execute_multiprocess(files, num_examples, output_path, smile, length, stride, sample_rate, level):
@@ -85,8 +86,8 @@ def execute_multiprocess(files, num_examples, output_path, smile, length, stride
     
     with multiprocessing.Pool(PROCESSES) as pool:
         
-        # wav_ids = [wav_id for wav_id in sorted(os.listdir(input_dir))]
-        in_args = [(file, file_length, examples, output_path, smile, length, stride, sample_rate, level) for (file, file_length), examples in zip(files, num_examples)]
+        in_args = [(file, file_length, examples, output_path, smile, length, stride, sample_rate, level) 
+                for (file, file_length), examples in zip(files, num_examples) if not os.path.exists(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))))]
         
         jobs = [pool.apply_async(get_egemap, in_arg) for in_arg in in_args]
         
@@ -126,8 +127,9 @@ class Audioset:
         # generate the egemaps features for the 1st time if it does not exist
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
-                print("eGeMAPS LLDs do not exist. Generating... This might take a while")
                 os.makedirs(egemaps_lld_path)
+            if len(glob(os.path.join(egemaps_lld_path, "*.npy"))) < len(self.files):
+                print("eGeMAPS LLDs do not exist (%d/%d). Generating... This might take a while" % (len(glob(os.path.join(egemaps_lld_path, "*.npy"))), len(files)))
                 import opensmile
                 smile_lld = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
@@ -155,8 +157,9 @@ class Audioset:
 
         if egemaps_path is not None:
             if not os.path.exists(egemaps_path):
-                print("eGeMAPS functionals do not exist. Generating... This might take a while")
                 os.makedirs(egemaps_path)
+            if len(glob(os.path.join(egemaps_path, "*.npy"))) < len(self.files):
+                print("eGeMAPS functionals do not exist (%d/%d). Generating... This might take a while" % (len(glob(os.path.join(egemaps_path, "*.npy"))), len(files)))
                 import opensmile
                 smile_func = opensmile.Smile(
                     feature_set=opensmile.FeatureSet.eGeMAPSv02,
