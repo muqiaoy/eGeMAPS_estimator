@@ -31,7 +31,7 @@ trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 fs: 16000
-segment: 30
+segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
@@ -61,11 +61,14 @@ stft_mag_factor: .5
 egemaps_train_path: egemaps_functionals/train_joseph.npy
 egemaps_valid_path: egemaps_functionals/valid_joseph.npy
 egemaps_test_path: egemaps_functionals/test_joseph.npy
+egemaps_lld_train_path: 
+egemaps_lld_valid_path: 
+egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: spec/train_joseph.npy
-spec_valid_path: spec/valid_joseph.npy
-spec_test_path: spec/test_joseph.npy
+spec_train_path:
+spec_valid_path:
+spec_test_path:
 
 
 # Logging and printing, and does not impact training

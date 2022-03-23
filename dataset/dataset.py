@@ -72,7 +72,7 @@ def match_files(noisy, clean, matching="dns"):
 
 
 class NoisyCleanSet:
-    def __init__(self, noisy_dir, clean_dir, num_files=None, matching="sort", length=None, stride=None,
+    def __init__(self, dataPath, num_files=None, matching="sort", length=None, stride=None,
                  pad=True, sample_rate=None, egemaps_path=None, egemaps_lld_path=None, spec_path=None):
         """__init__.
         :param json_dir: directory containing both clean.json and noisy.json
@@ -82,9 +82,22 @@ class NoisyCleanSet:
         :param pad: pad the end of the sequence with zeros
         :param sample_rate: the signals sampling rate
         """
-        noisy = find_audio_files(noisy_dir)
-        clean = find_audio_files(clean_dir)
-        print(clean_dir)
+        noisy_json = os.path.join(dataPath, 'noisy.json')
+        clean_json = os.path.join(dataPath, 'clean.json')
+        print("Loading data from data path %s" % dataPath)
+        if not os.path.exists(noisy_json) or not os.path.exists(clean_json):
+            print("Generating json files for data path %s" % dataPath)
+            noisy = find_audio_files(os.path.join(dataPath, "noisy"))
+            clean = find_audio_files(os.path.join(dataPath, "clean"))
+            with open(noisy_json, 'w') as f:
+                json.dump(noisy, f)
+            with open(clean_json, 'w') as f:
+                json.dump(noisy, f)
+
+        with open(noisy_json, 'r') as f:
+            noisy = json.load(f)
+        with open(clean_json, 'r') as f:
+            clean = json.load(f)
 
         match_files(noisy, clean, matching)
         kw = {'length': length, 'stride': stride, 'pad': pad, 'sample_rate': sample_rate}

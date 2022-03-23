@@ -29,6 +29,7 @@ from .stft_loss import MultiResolutionSTFTLoss
 from .utils import bold, copy_state, pull_metric, serialize_model, swap_state, LogProgress
 from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
 from model.FullSubNet.feature import drop_band
+from model.m5 import M5
 
 logger = logging.getLogger(__name__)
 
@@ -303,13 +304,18 @@ class Trainer(object):
             else:
                 raise NotImplementedError
 
-            input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
 
                 
             with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
-                    encoded_out = self.estimator(input_spec).encoder_out.global_sample
-                    estimated_egemaps = self.dmodel.fc(encoded_out)
+                    if isinstance(self.estimator, VAE):
+                        input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
+                        encoded_out = self.estimator(input_spec).encoder_out.global_sample
+                        estimated_egemaps = self.dmodel.fc(encoded_out)
+                    elif isinstance(self.estimator, M5):
+                        estimated_egemaps = self.estimator(noisy)
+                    else:
+                        raise NotImplementedError
                     if self.args.egemaps_type == "functionals":
                         egemaps_func = data[2]
                         true_egemaps = egemaps_func

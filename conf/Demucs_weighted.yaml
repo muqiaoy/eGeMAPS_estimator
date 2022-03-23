@@ -35,7 +35,7 @@ validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: "weights/dns_train_normalized_fun_ege_diff_weights_raw.npy"
 fs: 16000
-segment: 30
+segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns

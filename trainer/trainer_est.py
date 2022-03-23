@@ -210,25 +210,30 @@ class Trainer_est(object):
             data = [x.to(self.device) for x in data]
             clean = data[1]
             egemaps = data[2]
-            spec = data[3]
-            spec = spec.transpose(1, 2)
-            estimate = self.dmodel(spec)
-            # apply a loss function after each layer
-            with torch.autograd.set_detect_anomaly(True):
-                # if self.args.loss == 'l1':
-                #     loss = F.l1_loss(egemaps, estimate)
-                # elif self.args.loss == 'l2':
-                #     loss = F.mse_loss(egemaps, estimate)
-                # elif self.args.loss == 'huber':
-                #     loss = F.smooth_l1_loss(egemaps, estimate)
-                # else:
-                #     raise ValueError(f"Invalid loss {self.args.loss}")
+            if self.args.model == "VAE":
+                spec = data[3]
+                spec = spec.transpose(1, 2)
+                estimate = self.dmodel(spec)
+                # apply a loss function after each layer
+                    # if self.args.loss == 'l1':
+                    #     loss = F.l1_loss(egemaps, estimate)
+                    # elif self.args.loss == 'l2':
+                    #     loss = F.mse_loss(egemaps, estimate)
+                    # elif self.args.loss == 'huber':
+                    #     loss = F.smooth_l1_loss(egemaps, estimate)
+                    # else:
+                    #     raise ValueError(f"Invalid loss {self.args.loss}")
                 losses = self.mi_loss(spec, estimate, beta_kl=1., beta_mi=1.)
                 loss = losses.loss
+            
+            elif self.args.model == 'M5':
+                estimate = self.dmodel(clean)
+                loss = F.mse_loss(estimate, egemaps)
+            else:
+                raise NotImplementedError
 
-                # MultiResolution STFT loss
-
-                # optimize model in training mode
+            # optimize model in training mode
+            with torch.autograd.set_detect_anomaly(True):
                 if label == 'Train':
                     self.optimizer.zero_grad()
                     loss.backward()

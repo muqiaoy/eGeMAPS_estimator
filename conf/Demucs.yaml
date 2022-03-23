@@ -35,7 +35,7 @@ validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: 
 fs: 16000
-segment: 30
+segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
