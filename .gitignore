@@ -1,11 +1,20 @@
 # experiments related
+pretrained/
 exp/
 s3prl/
 egemaps_functionals/
+egemaps_lld/
+spec/
+spec_librosa/
 enhanced_audios/
+results_metrics/
+results_dnsmos/
+weights/
+results/
 
 # custom scripts
 misc/
+test.py
 
 
 # Byte-compiled / optimized / DLL files

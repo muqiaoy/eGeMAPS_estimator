@@ -176,6 +176,7 @@ class Demucs(nn.Module):
         for encode in self.encoder:
             x = encode(x)
             skips.append(x)
+        encoded_out = x
         x = x.permute(2, 0, 1)
         x, _ = self.lstm(x)
         x = x.permute(1, 2, 0)
@@ -190,7 +191,7 @@ class Demucs(nn.Module):
             x = downsample2(x)
 
         x = x[..., :length]
-        return std * x
+        return std * x, encoded_out
 
 
 

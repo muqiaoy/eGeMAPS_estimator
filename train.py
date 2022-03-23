@@ -14,12 +14,13 @@ import numpy as np
 from glob import glob
 from pathlib import Path
 import shutil
-import opensmile
 
 import torch
+import torch.nn as nn
 
 from model import *
-from model.egemaps_estimator import Egemaps_estimator
+from model.egemaps_estimator import SelfAttentionPooling
+from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer import Trainer
@@ -48,48 +49,56 @@ def main(args):
                 shutil.move(p, pn)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
-    smile_F = opensmile.Smile(
-        feature_set=opensmile.FeatureSet.eGeMAPSv02,
-        feature_level=opensmile.FeatureLevel.Functionals)
+    logging.info(args)
 
     if args.model == 'NSNet2':
         raise NotImplementedError
-        model = NSNet2(modelfile=args.modelPath, cfg=args.cfg)
-        logging.info("Loaded checkpoint from %s" % args.modelPath)
+
     elif args.model == 'Demucs':
         model = Demucs(**args.demucs, sample_rate=args.fs)
         state_dict = torch.load(args.modelPath)
         model.load_state_dict(state_dict)
 
-        if args.estimatorPath is not None:
-            estimator = Egemaps_estimator(smile_F=smile_F)
-            package = torch.load(args.estimatorPath)
-            estimator.load_state_dict(package['state'])
-            logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
-        else:
-            estimator = None
-            logging.info("Loaded checkpoint from %s" % (args.modelPath))
+
+    elif args.model == 'FullSubNet':
+        model = FullSubNet(**args.fullsubnet, sample_rate=args.fs)
+        state_dict = torch.load(args.modelPath)["model"]
+        model.load_state_dict(state_dict)
+
+    elif args.model == 'ConvTasNet':
+        model = ConvTasNet(**args.convtasnet, sample_rate=args.fs)
+        state_dict = torch.load(args.modelPath)
+        model.load_state_dict(state_dict)
 
     else:
-        raise NotImplementedError(feat_dim=args.egemaps_dim)
+        raise NotImplementedError(args.model)
+
+    if args.estimatorPath is not None:
+        estimator = VAE(**args.vae)
+        package = torch.load(args.estimatorPath)
+        estimator.load_state_dict(package['state'], strict=False)
+        logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
+    else:
+        estimator = None
+        logging.info("Loaded checkpoint from %s" % (args.modelPath))
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
     tr_noisy_dir = os.path.join(args.dataPath, args.trainPath, "noisy")
     tr_clean_dir = os.path.join(args.dataPath, args.trainPath, "clean")
-    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path)
+    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, egemaps_lld_path=args.egemaps_lld_train_path, spec_path=args.spec_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of train files: %s" % len(tr_dataset))
     cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
     cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path)
+    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, egemaps_lld_path=args.egemaps_lld_valid_path, spec_path=args.spec_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
     tt_noisy_dir = os.path.join(args.dataPath, args.testPath, "noisy")
     tt_clean_dir = os.path.join(args.dataPath, args.testPath, "clean")
-    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs)
+    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, egemaps_lld_path=args.egemaps_lld_test_path, spec_path=args.spec_test_path)
     tt_loader = distrib.loader(
         tt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of test files: %s" % len(tt_dataset))
@@ -98,15 +107,47 @@ def main(args):
 
     if torch.cuda.is_available():
         model.cuda()
+        model = nn.DataParallel(model, device_ids=list(range(args.ngpu)))
         if estimator is not None:
+            if args.egemaps_type == 'lld':
+                model.fc = nn.Sequential(
+                        nn.Conv1d(256, 1024, kernel_size=3),
+                        nn.BatchNorm1d(1024),
+                        nn.ReLU(),
+                        nn.Conv1d(1024, 2048, kernel_size=3),
+                        nn.BatchNorm1d(2048),
+                        nn.ReLU(),
+                        nn.Conv1d(2048, 2996, kernel_size=3),
+                        nn.BatchNorm1d(2996),
+                        nn.ReLU(),
+                        nn.Linear(932, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 25)).cuda()
+            elif args.egemaps_type == 'functionals':
+                model.fc = nn.Sequential(
+                        SelfAttentionPooling(256),
+                        nn.Linear(256, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 128),
+                        nn.ReLU(),
+                        nn.Linear(128, 88)
+                        ).cuda()
+            else:
+                raise NotImplementedError
             estimator.cuda()
+        else:
+            estimator = None
 
     if args.optim == "Adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
+    if args.scheduler:
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, min_lr=float(args.lr) / 100)
+    else:
+        scheduler = None
         
-    trainer = Trainer(data, model, estimator, optimizer, args)
+    trainer = Trainer(data, model, estimator, optimizer, args, scheduler)
     trainer.train()
 
 
@@ -128,8 +169,10 @@ if __name__ == "__main__":
         args = argparse.Namespace()
         args.__dict__.update(yaml.load(f, Loader=yaml.FullLoader))
         args.__dict__.update(conf_args.__dict__)
-        args.device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+        args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if args.ngpu == -1:
+            args.ngpu = torch.cuda.device_count()
 
-    print(args)
+    # print(args)
     set_seed(args.seed)
     main(args)

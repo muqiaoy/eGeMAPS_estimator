@@ -10,9 +10,11 @@ import logging
 from pathlib import Path
 import os
 import time
+from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
+import collections
 
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -202,21 +204,26 @@ class Trainer_est(object):
 
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
-        for i, data in enumerate(logprog):
+        for data in tqdm(data_loader):
             data = [x.to(self.device) for x in data]
             clean = data[1]
             egemaps = data[2]
-            estimate = self.dmodel(clean)
+            spec = data[3]
+            spec = spec.transpose(1, 2)
+            estimate = self.dmodel(spec)
             # apply a loss function after each layer
             with torch.autograd.set_detect_anomaly(True):
-                if self.args.loss == 'l1':
-                    loss = F.l1_loss(egemaps, estimate)
-                elif self.args.loss == 'l2':
-                    loss = F.mse_loss(egemaps, estimate)
-                elif self.args.loss == 'huber':
-                    loss = F.smooth_l1_loss(egemaps, estimate)
-                else:
-                    raise ValueError(f"Invalid loss {self.args.loss}")
+                # if self.args.loss == 'l1':
+                #     loss = F.l1_loss(egemaps, estimate)
+                # elif self.args.loss == 'l2':
+                #     loss = F.mse_loss(egemaps, estimate)
+                # elif self.args.loss == 'huber':
+                #     loss = F.smooth_l1_loss(egemaps, estimate)
+                # else:
+                #     raise ValueError(f"Invalid loss {self.args.loss}")
+                losses = self.mi_loss(spec, estimate, beta_kl=1., beta_mi=1.)
+                loss = losses.loss
+
                 # MultiResolution STFT loss
 
                 # optimize model in training mode
@@ -230,3 +237,32 @@ class Trainer_est(object):
             # Just in case, clear some memory
             del loss, estimate
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
+
+
+    def mi_loss(self, input, outputs, beta_kl=10., beta_mi=10.):
+        reconstruction = outputs.decoder_out
+        global_sample = outputs.encoder_out.global_sample
+        local_sample = outputs.encoder_out.local_sample
+        
+        prior = torch.distributions.Normal(torch.zeros(local_sample.size()).cuda(), torch.ones(local_sample.size()).cuda())
+        data_prop = torch.distributions.Normal(reconstruction, 0.01*torch.ones(reconstruction.size()).cuda())
+        prior_ll = torch.mean(prior.log_prob(local_sample))
+
+        global_sample_repeated = global_sample
+        
+        z_prediction_ll = torch.mean(outputs.predictor_out.log_prob(global_sample_repeated))
+        
+        reconstruction_ll = -(F.mse_loss(reconstruction, input, size_average=False)/(input.size(0)))/input.size(1)
+        
+        z_local_entropy = -torch.mean(outputs.encoder_out.local_dist.log_prob(local_sample))
+        z_global_entropy = -torch.mean(outputs.encoder_out.global_dist.log_prob(global_sample))
+        KL_local_prior = prior_ll + z_local_entropy
+        # first term is a cross-entropy from prediction and prior, together with the entropy this is the mutual information
+        MI_global_prediction = z_prediction_ll + z_global_entropy
+        
+        Loss = - reconstruction_ll - beta_kl * KL_local_prior - beta_mi * MI_global_prediction
+        
+        VAELosses = collections.namedtuple("Losses", ["loss", "reconstruction_nll", "prior_nll", "z_prediction_nll", "z_global_entropy", "z_local_entropy"])
+        Losses = VAELosses(loss=Loss, reconstruction_nll=-reconstruction_ll, prior_nll=-prior_ll, z_prediction_nll=-z_prediction_ll, z_global_entropy=z_global_entropy, z_local_entropy=z_local_entropy)
+        
+        return Losses

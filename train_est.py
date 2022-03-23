@@ -13,12 +13,11 @@ import numpy as np
 from glob import glob
 from pathlib import Path
 import shutil
-import opensmile
 
 import torch
 
 from model import *
-from model.egemaps_estimator import Egemaps_estimator
+from model.vae import VAE
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer_est import Trainer_est
@@ -47,33 +46,30 @@ def main(args):
                 shutil.move(p, pn)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s (%(filename)s:%(lineno)d) %(message)s", filename=logname, filemode='w')
-    smile_F = opensmile.Smile(
-        feature_set=opensmile.FeatureSet.eGeMAPSv02,
-        feature_level=opensmile.FeatureLevel.Functionals)
 
-    if args.model == 'estimator':
-        estimator = Egemaps_estimator(smile_F=smile_F)
+    if args.model == 'VAE':
+        estimator = VAE(**args.vae)
 
     else:
-        raise NotImplementedError(feat_dim=args.egemaps_dim)
+        raise NotImplementedError(args.model)
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
     tr_noisy_dir = os.path.join(args.dataPath, args.trainPath, "noisy")
     tr_clean_dir = os.path.join(args.dataPath, args.trainPath, "clean")
-    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path)
+    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, spec_path=args.spec_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of train files: %s" % len(tr_dataset))
     cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
     cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path)
+    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, spec_path=args.spec_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
     tt_noisy_dir = os.path.join(args.dataPath, args.testPath, "noisy")
     tt_clean_dir = os.path.join(args.dataPath, args.testPath, "clean")
-    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path)
+    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, spec_path=args.spec_test_path)
     tt_loader = distrib.loader(
         tt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of test files: %s" % len(tt_dataset))
@@ -110,7 +106,9 @@ if __name__ == "__main__":
         args = argparse.Namespace()
         args.__dict__.update(yaml.load(f, Loader=yaml.FullLoader))
         args.__dict__.update(conf_args.__dict__)
-        args.device = torch.device('cuda' if torch.cuda.is_available() and not args.cpu else 'cpu')
+        args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if args.ngpu == -1:
+            args.ngpu = torch.cuda.device_count()
 
     print(args)
     set_seed(args.seed)

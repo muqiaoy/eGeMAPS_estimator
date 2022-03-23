@@ -10,9 +10,13 @@ import logging
 from pathlib import Path
 import os
 import time
+import numpy as np
+import functools
+from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
+import torchaudio
 
 import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -23,21 +27,24 @@ from .enhance import enhance
 from .evaluate import evaluate
 from .stft_loss import MultiResolutionSTFTLoss
 from .utils import bold, copy_state, pull_metric, serialize_model, swap_state, LogProgress
+from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
+from model.FullSubNet.feature import drop_band
 
 logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
-    def __init__(self, data, model, estimator, optimizer, args):
+    def __init__(self, data, model, estimator, optimizer, args, scheduler=None):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
         self.model = model
         self.dmodel = distrib.wrap(model)
         self.estimator = estimator
-        if self.estimator is not None:
-            self.estimator.eval()
+        # if self.estimator is not None:
+        #     self.estimator.eval()
         self.optimizer = optimizer
+        self.scheduler = scheduler
 
         # data augment
         augments = []
@@ -74,11 +81,21 @@ class Trainer(object):
         self.args = args
         self.mrstftloss = MultiResolutionSTFTLoss(factor_sc=args.stft_sc_factor,
                                                   factor_mag=args.stft_mag_factor).to(self.device)
+        if args.weightPath is not None:
+            self.weight = torch.from_numpy(np.load(args.weightPath)).float().cuda()
+            self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+        else:
+            self.weight = None
+        window_fn = functools.partial(torch.hann_window, device=self.args.device)
+        self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
         self._reset()
 
     def _serialize(self):
         package = {}
-        package['model'] = serialize_model(self.model)
+        if isinstance(self.model, torch.nn.DataParallel):
+            package['model'] = serialize_model(self.model.module)
+        else:
+            package['model'] = serialize_model(self.model)
         package['optimizer'] = self.optimizer.state_dict()
         package['history'] = self.history
         package['best_state'] = self.best_state
@@ -136,9 +153,17 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
+        logger.info('Enhance and save samples...')
+        out_dir = os.path.join(self.args.savePath, "0")
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        enhance(self.args, self.model, out_dir)
+
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
             self.model.train()
+            if self.estimator is not None:
+                self.estimator.train()
             start = time.time()
             logger.info('-' * 70)
             logger.info("Training...")
@@ -152,6 +177,8 @@ class Trainer(object):
                 logger.info('-' * 70)
                 logger.info('Cross validation...')
                 self.model.eval()
+                if self.estimator is not None:
+                    self.estimator.eval()
                 with torch.no_grad():
                     valid_loss = self._run_one_epoch(epoch, cross_valid=True)
                 logger.info(
@@ -180,8 +207,12 @@ class Trainer(object):
                 metrics.update({'pesq': pesq, 'stoi': stoi})
 
                 # enhance some samples
-                # logger.info('Enhance and save samples...')
-                # enhance(self.args, self.model, self.samples_dir)
+                logger.info('Enhance and save samples...')
+                out_dir = os.path.join(self.args.savePath, str(epoch + 1))
+                if not os.path.exists(out_dir):
+                    os.makedirs(out_dir)
+                enhance(self.args, self.model, out_dir)
+
 
             self.history.append(metrics)
             info = " | ".join(f"{k.capitalize()} {v:.5f}" for k, v in metrics.items() if k != 'epoch')
@@ -205,36 +236,98 @@ class Trainer(object):
         label = ["Train", "Valid"][cross_valid]
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
-        for i, data in enumerate(logprog):
+
+        i = 0  # step
+        for data in tqdm(data_loader):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
+            # spec = data[3]
+            # spec = spec.transpose(1, 2)
             if not cross_valid:
                 sources = torch.stack([noisy - clean, clean])
                 sources = self.augment(sources)
                 noise, clean = sources
                 noisy = noise + clean
-            estimate = self.dmodel(noisy)
-            # apply a loss function after each layer
-            with torch.autograd.set_detect_anomaly(True):
-                if self.args.loss == 'l1':
-                    loss = F.l1_loss(clean, estimate)
-                elif self.args.loss == 'l2':
-                    loss = F.mse_loss(clean, estimate)
-                elif self.args.loss == 'huber':
-                    loss = F.smooth_l1_loss(clean, estimate)
-                else:
-                    raise ValueError(f"Invalid loss {self.args.loss}")
-                # MultiResolution STFT loss
-                if self.args.stft_loss:
-                    sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
-                    loss += sc_loss + mag_loss
+
+            loss = 0.
+            if self.args.model == "Demucs":
+                estimate, _ = self.dmodel(noisy)
+                # apply a loss function after each layer
+                input_estimator = estimate
+                with torch.autograd.set_detect_anomaly(True):
+                    if self.args.loss == 'l1':
+                        loss = F.l1_loss(clean, estimate)
+                    elif self.args.loss == 'l2':
+                        loss = F.mse_loss(clean, estimate)
+                    elif self.args.loss == 'huber':
+                        loss = F.smooth_l1_loss(clean, estimate)
+                    else:
+                        raise ValueError(f"Invalid loss {self.args.loss}")
+                    # MultiResolution STFT loss
+                    if self.args.stft_loss:
+                        sc_loss, mag_loss = self.mrstftloss(estimate.squeeze(1), clean.squeeze(1))
+                        loss += sc_loss + mag_loss
+            elif self.args.model == "FullSubNet":
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = self.dmodel.module.stft(torch.squeeze(noisy, dim=1))
+                _, _, clean_real, clean_imag = self.dmodel.module.stft(torch.squeeze(clean, dim=1))
+                cIRM = build_complex_ideal_ratio_mask(noisy_real, noisy_imag, clean_real, clean_imag)  # [B, F, T, 2]
+                # cIRM = drop_band(
+                #     cIRM.permute(0, 3, 1, 2),  # [B, 2, F ,T]
+                #     self.dmodel.num_groups_in_drop_band
+                # ).permute(0, 2, 3, 1)
+                noisy_mag = noisy_mag.unsqueeze(1)
+                cRM = self.dmodel(noisy_mag=noisy_mag, dropping_band=False)
+                cRM = cRM.permute(0, 2, 3, 1)
+                with torch.autograd.set_detect_anomaly(True):
+                    if self.args.loss == 'l1':
+                        loss = F.l1_loss(cIRM, cRM)
+                    elif self.args.loss == 'l2':
+                        loss = F.mse_loss(cIRM, cRM)
+                    elif self.args.loss == 'huber':
+                        loss = F.smooth_l1_loss(cIRM, cRM)
+                    # print(loss)
+                cRM = decompress_cIRM(cRM)
+                noisy_concat = torch.stack([noisy_real, noisy_imag], -1)
+                # noisy_concat = drop_band(
+                #     noisy_concat.permute(0, 3, 1, 2),  # [B, 2, F ,T]
+                #     self.dmodel.num_groups_in_drop_band
+                # ).permute(0, 2, 3, 1)
+                noisy_real = noisy_concat[..., 0]
+                noisy_imag = noisy_concat[..., 0]
+                enhanced_real = cRM[..., 0] * noisy_real - cRM[..., 1] * noisy_imag
+                enhanced_imag = cRM[..., 1] * noisy_real + cRM[..., 0] * noisy_imag
+                estimate = self.dmodel.module.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = torch.unsqueeze(estimate, dim=1)
+
+            else:
+                raise NotImplementedError
+
+            input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
+
                 
+            with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
-                    egemaps = data[2]
-                    estimated_egemaps = self.estimator(estimate)
-                    egemaps_loss = F.mse_loss(egemaps, estimated_egemaps)
-                    loss += self.args.egemaps_factor * egemaps_loss
+                    encoded_out = self.estimator(input_spec).encoder_out.global_sample
+                    estimated_egemaps = self.dmodel.fc(encoded_out)
+                    if self.args.egemaps_type == "functionals":
+                        egemaps_func = data[2]
+                        true_egemaps = egemaps_func
+                        if self.weight is not None:
+                            # egemaps_loss = torch.mean((estimated_egemaps @ self.weight[88:, -1] + egemaps_func @ self.weight[:88, -1]).abs())
+                            egemaps_loss = torch.norm( (estimated_egemaps - egemaps_func) @ self.weight[:, -1])
+                        else:
+                            egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_func)
+
+                    elif self.args.egemaps_type == "lld":
+                        # egemaps_lld = data[4]
+                        egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
+                    if not self.args.egeloss_only:
+                        loss += self.args.egemaps_factor * egemaps_loss
+                    else:
+                        loss = egemaps_loss
+                    if self.scheduler is not None:
+                        self.scheduler.step(loss)
 
                 # optimize model in training mode
                 if not cross_valid:
@@ -245,5 +338,8 @@ class Trainer(object):
             total_loss += loss.item()
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
-            del loss, estimate
+            del loss
+            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
+
+

@@ -1,6 +1,6 @@
 
 # General arguments
-cpu: False
+ngpu: -1
 modelPath: "pretrained/nsnet2-20ms-baseline.onnx"
 savePath: "exp/NSNet2"
 seed: 2

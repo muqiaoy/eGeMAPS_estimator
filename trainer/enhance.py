@@ -13,6 +13,7 @@ import os
 import sys
 
 import torch
+import torch.nn as nn
 import torchaudio
 
 import os,sys,inspect
@@ -22,6 +23,8 @@ sys.path.insert(0,parentdir)
 from dataset.audioset import Audioset, find_audio_files
 from dataset import distrib
 from . import load_pretrained
+from model import *
+from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
 
 from .utils import LogProgress
 
@@ -33,9 +36,10 @@ def add_flags(parser):
     Add the flags for the argument parser that are related to model loading and evaluation"
     """
     load_pretrained.add_model_flags(parser)
-    parser.add_argument('--device', default="cpu")
+    parser.add_argument('--ngpus', default="1")
     parser.add_argument('--dry', type=float, default=0,
                         help='dry/wet knob coefficient. 0 is only denoised, 1 only input signal.')
+    parser.add_argument('--fs', type=float, default=16000)
     parser.add_argument('--num_workers', type=int, default=10)
     parser.add_argument('--streaming', action="store_true",
                         help="true streaming evaluation for Demucs")
@@ -64,8 +68,29 @@ def get_estimate(model, noisy, args):
         raise NotImplementedError
     else:
         with torch.no_grad():
-            estimate = model(noisy)
-            estimate = (1 - args.dry) * estimate + args.dry * noisy
+            if isinstance(model.module, Demucs):
+                estimate, _ = model(noisy)
+                estimate = (1 - args.dry) * estimate + args.dry * noisy
+            elif isinstance(model.module, FullSubNet):
+                # full band crm mask
+
+                noisy_mag, noisy_phase, noisy_real, noisy_imag = model.module.stft(torch.squeeze(noisy, dim=1))
+
+                noisy_mag = noisy_mag.unsqueeze(1)
+                pred_crm = model(noisy_mag=noisy_mag, dropping_band=False)
+                pred_crm = pred_crm.permute(0, 2, 3, 1)
+
+                pred_crm = decompress_cIRM(pred_crm)
+                enhanced_real = pred_crm[..., 0] * noisy_real - pred_crm[..., 1] * noisy_imag
+                enhanced_imag = pred_crm[..., 1] * noisy_real + pred_crm[..., 0] * noisy_imag
+                estimate = model.module.istft((enhanced_real, enhanced_imag), length=noisy.size(-1), input_type="real_imag")
+                estimate = torch.unsqueeze(estimate, dim=1)
+                # estimate = enhanced.detach().squeeze(0).cpu().numpy()
+            elif isinstance(model.module, ConvTasNet):
+                estimate, _ = model.module.enhance(noisy)
+            
+            else:
+                raise NotImplementedError
     return estimate
 
 
@@ -73,8 +98,8 @@ def save_wavs(estimates, noisy_sigs, filenames, out_dir, sr=16_000):
     # Write result
     for estimate, noisy, filename in zip(estimates, noisy_sigs, filenames):
         filename = os.path.join(out_dir, os.path.basename(filename).rsplit(".", 1)[0])
-        write(noisy, filename + "_noisy.wav", sr=sr)
-        write(estimate, filename + "_enhanced.wav", sr=sr)
+        # write(noisy, filename + "_noisy.wav", sr=sr)
+        write(estimate, filename + ".wav", sr=sr)
 
 
 def write(wav, filename, sr=16_000):
@@ -83,16 +108,18 @@ def write(wav, filename, sr=16_000):
     torchaudio.save(filename, wav.cpu(), sr)
 
 
-def get_dataset(args, sample_rate, channels):
+def get_dataset(args, sample_rate, channels=1):
     if hasattr(args, 'dset'):
         paths = args.dset
     else:
         paths = args
-    if paths.noisy_json:
+    if hasattr(paths, "noisy_json") and paths.noisy_json:
         with open(paths.noisy_json) as f:
             files = json.load(f)
-    elif paths.noisy_dir:
+    elif hasattr(paths, "noisy_dir") and paths.noisy_dir:
         files = find_audio_files(paths.noisy_dir)
+    elif hasattr(paths, "testPath") and paths.testPath:
+        files = find_audio_files(os.path.join(paths.dataPath, paths.testPath, "noisy"))
     else:
         logger.warning(
             "Small sample set was not provided by either noisy_dir or noisy_json. "
@@ -110,14 +137,16 @@ def _estimate_and_save(model, noisy_signals, filenames, out_dir, args):
 def enhance(args, model=None, local_out_dir=None):
     # Load model
     if not model:
-        model = load_pretrained.get_model(args).to(args.device)
+        model = load_pretrained.get_model(args)
+    if not isinstance(model, torch.nn.DataParallel):
+        model = nn.DataParallel(model, device_ids=list(range(args.ngpu)))
     model.eval()
     if local_out_dir:
         out_dir = local_out_dir
     else:
         out_dir = args.out_dir
 
-    dset = get_dataset(args, model.sample_rate, model.chin)
+    dset = get_dataset(args, args.fs)
     if dset is None:
         return
     loader = distrib.loader(dset, batch_size=1)
@@ -132,15 +161,15 @@ def enhance(args, model=None, local_out_dir=None):
         for data in iterator:
             # Get batch data
             noisy_signals, filenames = data
-            noisy_signals = noisy_signals.to(args.device)
-            if args.device == 'cpu' and args.num_workers > 1:
+            noisy_signals = noisy_signals.cuda()
+            if args.ngpu == 0 and args.num_workers > 1:
                 pendings.append(
                     pool.submit(_estimate_and_save,
                                 model, noisy_signals, filenames, out_dir, args))
             else:
                 # Forward
                 estimate = get_estimate(model, noisy_signals, args)
-                save_wavs(estimate, noisy_signals, filenames, out_dir, sr=model.sample_rate)
+                save_wavs(estimate, noisy_signals, filenames, out_dir, sr=args.fs)
 
         if pendings:
             print('Waiting for pending jobs...')

@@ -1,0 +1,114 @@
+
+# General arguments
+ngpu: -1
+modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
+estimatorPath: "exp/VAE/best.th"
+savePath: "exp/Demucs_weighted"
+seed: 2
+
+
+# Model related
+model: Demucs
+demucs:
+    chin: 1
+    chout: 1
+    hidden: 64
+    max_hidden: 10000
+    causal: true
+    glu: true
+    depth: 5
+    kernel_size: 8
+    stride: 4
+    normalize: true
+    resample: 4
+    growth: 2
+    rescale: 0.1
+vae:
+    z_size: 256
+    local_z_size: 256
+
+
+# Data related
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
+trainPath: "synthesized_joseph"
+validPath: "synthesized_valid"
+testPath: "test_set/synthetic/no_reverb"
+weightPath: "weights/dns_train_normalized_fun_ege_diff_weights_raw.npy"
+fs: 16000
+segment: 30
+stride: 1    # in seconds, how much to stride between training examples
+pad: true   # if training sample is too short, pad it
+matching: dns
+num_train_files:
+
+# Data augmentation
+remix: false   # remix noise and clean
+bandmask: 0.   # drop at most this fraction of freqs in mel scale
+shift: 0    # random shift, number of samples
+shift_same: false   # shift noise and clean by the same amount
+revecho: 0  # add reverb like augment
+
+
+# Training related
+batch_size: 16
+epochs: 10
+num_workers: 4
+optim: Adam
+scheduler: false
+loss: l2
+lr: 1.0e-4
+beta2: 0.999
+stft_loss: false
+stft_sc_factor: .5
+stft_mag_factor: .5
+
+# Egemaps stuff
+egemaps_type: functionals
+egeloss_only: false
+egemaps_factor: 1.
+egemaps_train_path: egemaps_functionals/train_joseph.npy
+egemaps_valid_path: egemaps_functionals/valid_joseph.npy
+egemaps_test_path: egemaps_functionals/test_joseph.npy
+# egemaps_lld_train_path: egemaps_lld/train_joseph.npy
+# egemaps_lld_valid_path: egemaps_lld/valid_joseph.npy
+# egemaps_lld_test_path: egemaps_lld/test_joseph.npy
+egemaps_lld_train_path: 
+egemaps_lld_valid_path: 
+egemaps_lld_test_path: 
+
+# Spec stuff
+# spec_train_path: spec/train_joseph.npy
+# spec_valid_path: spec/valid_joseph.npy
+# spec_test_path: spec/test_joseph.npy
+spec_train_path: 
+spec_valid_path: 
+spec_test_path: 
+
+
+# Logging and printing, and does not impact training
+num_prints: 5
+device: cuda
+num_workers: 5
+verbose: 0
+show: 0   # just show the model and its size and exit
+
+# Checkpointing, by default automatically load last checkpoint
+checkpoint: true
+continue_from: '' # Path the a checkpoint.th file to start from.
+                  # this is not used in the name of the experiment!
+                  # so use a dummy=something not to mixup experiments.
+continue_best: false  # continue from best, not last state if continue_from is set.
+continue_pretrained:   # use either dns48, dns64 or master64 to fine tune from pretrained-model
+restart: false # Ignore existing checkpoints
+checkpoint_file: checkpoint.th
+best_file: best.th  # will contain only best model at any point
+history_file: history.json
+samples_dir: samples
+save_again: false  # if true, only load checkpoint and save again, useful to reexport best.th
+
+
+# Evaluation stuff
+pesq: true # compute pesq?
+eval_every: 1  # compute test metrics every so epochs
+dry: 0.  # dry/wet knob value at eval
+streaming: false  # use streaming evaluation for Demucs
