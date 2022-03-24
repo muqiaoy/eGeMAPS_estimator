@@ -1,6 +1,6 @@
 
 # General arguments
-ngpu: 4
+ngpu: 1
 savePath: "exp/M5"
 seed: 2
 
@@ -13,7 +13,7 @@ m5:
 
 
 # Data related
-dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
@@ -33,7 +33,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 8192
+batch_size: 512
 epochs: 50
 num_workers: 4
 optim: Adam

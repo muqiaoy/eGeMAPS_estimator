@@ -29,6 +29,7 @@ from .stft_loss import MultiResolutionSTFTLoss
 from .utils import bold, copy_state, pull_metric, serialize_model, swap_state, LogProgress
 from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
 from model.FullSubNet.feature import drop_band
+from model.vae import VAE
 from model.m5 import M5
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,7 @@ class Trainer(object):
 
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
+            print("Epoch %d" % epoch)
             self.model.train()
             if self.estimator is not None:
                 self.estimator.train()
@@ -238,7 +240,7 @@ class Trainer(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
 
-        for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
+        for i, data in tqdm(enumerate(logprog), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
@@ -312,20 +314,21 @@ class Trainer(object):
                         encoded_out = self.estimator(input_spec).encoder_out.global_sample
                         estimated_egemaps = self.dmodel.fc(encoded_out)
                     elif isinstance(self.estimator, M5):
-                        estimated_egemaps = self.estimator(noisy)
+                        estimated_egemaps = self.estimator(estimate)
                     else:
-                        raise NotImplementedError
+                        raise NotImplementedError(type(self.estimator))
                     if self.args.egemaps_type == "functionals":
                         egemaps_func = data[2]
-                        true_egemaps = egemaps_func
+                        true_egemaps = egemaps_func.squeeze(1)
                         if self.weight is not None:
                             # egemaps_loss = torch.mean((estimated_egemaps @ self.weight[88:, -1] + egemaps_func @ self.weight[:88, -1]).abs())
-                            egemaps_loss = torch.norm( (estimated_egemaps - egemaps_func) @ self.weight[:, -1])
+                            egemaps_loss = torch.norm( (estimated_egemaps - true_egemaps) @ self.weight[:, -1])
                         else:
-                            egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_func)
+                            egemaps_loss = F.mse_loss(estimated_egemaps, true_egemaps)
 
                     elif self.args.egemaps_type == "lld":
-                        # egemaps_lld = data[4]
+                        # egemaps_lld = data[3]
+                        raise NotImplementedError
                         egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
                     if not self.args.egeloss_only:
                         loss += self.args.egemaps_factor * egemaps_loss

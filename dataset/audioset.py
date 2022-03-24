@@ -100,7 +100,7 @@ def execute_multiprocess(files, num_examples, output_path, smile, length, stride
 
 class Audioset:
     def __init__(self, files=None, length=None, stride=None,
-                 pad=True, sample_rate=None,
+                 pad=True, with_path=False, sample_rate=None,
                  channels=None, convert=False, egemaps_path=None, egemaps_lld_path=None, spec_path=None):
         """
         files should be a list [(file, length)]
@@ -112,6 +112,7 @@ class Audioset:
         self.sample_rate = sample_rate
         self.channels = channels
         self.convert = convert
+        self.with_path = with_path
         for file, file_length in self.files:
             if length is None:
                 examples = 1
@@ -242,16 +243,19 @@ class Audioset:
 
 
             if self.egemaps_path is not None:
-                egemaps_func = torch.from_numpy(np.load(os.path.join(self.egemaps_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1])
+                egemaps_func = torch.from_numpy(np.load(os.path.join(self.egemaps_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1]).float()
                 egemaps_func = F.normalize(egemaps_func)
             else:
                 egemaps_func = torch.Tensor([-1])
             if self.egemaps_lld_path is not None:
-                egemaps_lld = torch.from_numpy(np.load(os.path.join(self.egemaps_lld_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1])
+                egemaps_lld = torch.from_numpy(np.load(os.path.join(self.egemaps_lld_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1]).float()
                 egemaps_lld = F.normalize(egemaps_lld)
             else:
                 egemaps_lld = torch.Tensor([-1])
-            return out, egemaps_func, egemaps_lld
+            if self.with_path:
+                return out, egemaps_func, egemaps_lld, file
+            else:
+                return out, egemaps_func, egemaps_lld
 
 
 if __name__ == "__main__":

@@ -136,7 +136,7 @@ def main(args):
             else:
                 raise NotImplementedError
             estimator.cuda()
-            estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
+            # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
         else:
             estimator = None
 

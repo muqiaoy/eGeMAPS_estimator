@@ -2,7 +2,7 @@
 # General arguments
 ngpu: -1
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
-estimatorPath: "exp/best.th"
+estimatorPath: "exp/M5/best.th"
 savePath: "exp/Demucs"
 seed: 2
 
@@ -30,7 +30,7 @@ m5:
 
 
 # Data related
-dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
@@ -51,9 +51,9 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 16
+batch_size: 120
 epochs: 10
-num_workers: 4
+num_workers: 8
 optim: Adam
 scheduler: false
 loss: l2
@@ -83,7 +83,6 @@ spec_test_path:
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 
