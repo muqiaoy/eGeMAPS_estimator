@@ -26,7 +26,7 @@ vae:
 
 
 # Data related
-dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
+dataPath: "/home/muqiaoy/workhorse3/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
@@ -58,9 +58,9 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff (ms)
-egemaps_train_path: 
-egemaps_valid_path:
-egemaps_test_path: 
+egemaps_train_path: egemaps_funcs/train_joseph.npy
+egemaps_valid_path: egemaps_funcs/valid_joseph.npy
+egemaps_test_path: egemaps_funcs/test_joseph.npy
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 

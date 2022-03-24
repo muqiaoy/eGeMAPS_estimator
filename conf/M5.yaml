@@ -1,7 +1,7 @@
 
 # General arguments
-ngpu: 4
-savePath: "exp/M5"
+ngpu: 1
+savePath: "exp/M5_fast"
 seed: 2
 
 
@@ -33,7 +33,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 8192
+batch_size: 256
 epochs: 50
 num_workers: 4
 optim: Adam
@@ -45,9 +45,9 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff (ms)
-egemaps_train_path: egemaps_funcs/train
-egemaps_valid_path: egemaps_funcs/valid
-egemaps_test_path: egemaps_funcs/test
+egemaps_train_path: egemaps_funcs/train_joseph.npy
+egemaps_valid_path: egemaps_funcs/valid_joseph.npy
+egemaps_test_path: egemaps_funcs/test_joseph.npy
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 

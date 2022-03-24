@@ -208,7 +208,7 @@ class Trainer_est(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
         
-        for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
+        for i, data in tqdm(enumerate(logprog), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]

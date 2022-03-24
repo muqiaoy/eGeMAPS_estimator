@@ -64,23 +64,23 @@ def main(args):
     tr_dataset = NoisyCleanSet(tr_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, egemaps_lld_path=args.egemaps_lld_train_path, spec_path=args.spec_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    print("Total number of train files: %s" % len(tr_dataset))
+    print("Total number of train segments: %s" % len(tr_dataset))
     cv_dir = os.path.join(args.dataPath, args.validPath)
     cv_dataset = NoisyCleanSet(cv_dir, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, egemaps_lld_path=args.egemaps_lld_valid_path, spec_path=args.spec_valid_path)
     cv_loader = distrib.loader(
         cv_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
-    print("Total number of valid files: %s" % len(cv_dataset))
+    print("Total number of valid segments: %s" % len(cv_dataset))
     tt_dir = os.path.join(args.dataPath, args.testPath)
     tt_dataset = NoisyCleanSet(tt_dir, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, egemaps_lld_path=args.egemaps_lld_test_path, spec_path=args.spec_test_path)
     tt_loader = distrib.loader(
         tt_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
-    print("Total number of test files: %s" % len(tt_dataset))
+    print("Total number of test segments: %s" % len(tt_dataset))
 
     data = {"tr_loader": tr_loader, "cv_loader": cv_loader, "tt_loader": tt_loader}
 
     if torch.cuda.is_available():
         estimator.cuda()
-        estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
+        # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
 
     if args.optim == "Adam":
         optimizer = torch.optim.Adam(estimator.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
