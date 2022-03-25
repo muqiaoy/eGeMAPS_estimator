@@ -80,7 +80,7 @@ def main(args):
 
     if torch.cuda.is_available():
         estimator.cuda()
-        estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
+        # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
 
     if args.optim == "Adam":
         optimizer = torch.optim.Adam(estimator.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))

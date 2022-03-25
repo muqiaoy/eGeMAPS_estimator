@@ -22,6 +22,7 @@ fullsubnet:
     weight_init: false
     norm_type: "offline_laplace_norm"
     num_groups_in_drop_band: 2
+estimator: VAE
 vae:
     z_size: 256
     local_z_size: 256
@@ -49,7 +50,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 4
+batch_size: 24
 epochs: 10
 num_workers: 4
 optim: Adam
@@ -65,9 +66,9 @@ stft_mag_factor: .5
 egemaps_type: functionals
 egeloss_only: False
 egemaps_factor: 1.
-egemaps_train_path: egemaps_functionals/train_joseph.npy
-egemaps_valid_path: egemaps_functionals/valid_joseph.npy
-egemaps_test_path: egemaps_functionals/test_joseph.npy
+egemaps_train_path: egemaps_funcs/train
+egemaps_valid_path: egemaps_funcs/valid
+egemaps_test_path: egemaps_funcs/test
 # egemaps_lld_train_path: egemaps_lld/train_joseph.npy
 # egemaps_lld_valid_path: egemaps_lld/valid_joseph.npy
 # egemaps_lld_test_path: egemaps_lld/test_joseph.npy

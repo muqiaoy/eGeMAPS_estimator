@@ -66,9 +66,9 @@ egemaps_lld_valid_path:
 egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path:
-spec_valid_path:
-spec_test_path:
+spec_train_path: spec/train
+spec_valid_path: spec/valid
+spec_test_path: spec/test
 
 
 # Logging and printing, and does not impact training

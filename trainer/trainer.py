@@ -85,9 +85,13 @@ class Trainer(object):
                                                   factor_mag=args.stft_mag_factor).to(self.device)
         if args.weightPath is not None:
             self.weight = torch.from_numpy(np.load(args.weightPath)).float().cuda()
-            self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+            # self.weight = torch.nn.functional.normalize(self.weight, dim=0)
         else:
             self.weight = None
+        if args.singularPath is not None:
+            self.U = torch.from_numpy(np.load(args.singularPath)).float().cuda()
+        else:
+            self.U = None
         window_fn = functools.partial(torch.hann_window, device=self.args.device)
         self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
         self._reset()
@@ -155,11 +159,11 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
-        logger.info('Enhance and save samples...')
-        out_dir = os.path.join(self.args.savePath, "0")
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
-        enhance(self.args, self.model, out_dir)
+        # logger.info('Enhance and save samples...')
+        # out_dir = os.path.join(self.args.savePath, "0")
+        # if not os.path.exists(out_dir):
+        #     os.makedirs(out_dir)
+        # enhance(self.args, self.model, out_dir)
 
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
@@ -315,14 +319,15 @@ class Trainer(object):
                         estimated_egemaps = self.dmodel.fc(encoded_out)
                     elif isinstance(self.estimator, M5):
                         estimated_egemaps = self.estimator(estimate)
+                        estimated_egemaps = self.dmodel.fc(estimated_egemaps)
                     else:
                         raise NotImplementedError(type(self.estimator))
                     if self.args.egemaps_type == "functionals":
                         egemaps_func = data[2]
                         true_egemaps = egemaps_func.squeeze(1)
-                        if self.weight is not None:
+                        if self.weight is not None and self.U is not None:
                             # egemaps_loss = torch.mean((estimated_egemaps @ self.weight[88:, -1] + egemaps_func @ self.weight[:88, -1]).abs())
-                            egemaps_loss = torch.norm( (estimated_egemaps - true_egemaps) @ self.weight[:, -1])
+                            egemaps_loss = torch.norm( (estimated_egemaps - true_egemaps) @ self.U @ self.weight[:, -2])
                         else:
                             egemaps_loss = F.mse_loss(estimated_egemaps, true_egemaps)
 
@@ -330,6 +335,8 @@ class Trainer(object):
                         # egemaps_lld = data[3]
                         raise NotImplementedError
                         egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
+                    else:
+                        raise NotImplementedError
                     if not self.args.egeloss_only:
                         loss += self.args.egemaps_factor * egemaps_loss
                     else:

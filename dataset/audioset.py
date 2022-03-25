@@ -81,6 +81,28 @@ def get_egemap(file, file_length, examples, output_path, smile, length, stride, 
     np.save(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))), egemaps)
 
 
+def get_spec(file, file_length, examples, output_path, spectrogram, length, stride, sample_rate):
+
+    num_frames = 0
+    offset = 0
+    if length is not None:
+        spec = np.zeros((examples, spectrogram.win_length // 2 + 1, length // spectrogram.hop_length + 1))
+    else:
+        spec = np.zeros((examples, spectrogram.win_length // 2 + 1, file_length // spectrogram.hop_length + 1))
+    for seg_idx in range(examples):
+        if length is not None:
+            offset = stride * seg_idx
+            num_frames = length
+        if torchaudio.get_audio_backend() in ['soundfile', 'sox_io']:
+            seg, sr = torchaudio.load(str(file),
+                                    frame_offset=offset,
+                                    num_frames=num_frames or -1)
+        else:
+            seg, sr = torchaudio.load(str(file), offset=offset, num_frames=num_frames)
+        spec[seg_idx] = spectrogram(seg)
+    np.save(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))), spec)
+
+
 def execute_multiprocess(files, num_examples, output_path, smile, length, stride, sample_rate, level):
     
     PROCESSES = 32
@@ -91,6 +113,23 @@ def execute_multiprocess(files, num_examples, output_path, smile, length, stride
                 for (file, file_length), examples in zip(files, num_examples) if not os.path.exists(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))))]
         
         jobs = [pool.apply_async(get_egemap, in_arg) for in_arg in in_args]
+        
+        for j in tqdm(jobs):
+            j.get()
+            
+    return None
+
+
+def execute_multiprocess_spec(files, num_examples, output_path, spectrogram, length, stride, sample_rate):
+    
+    PROCESSES = 32
+    
+    with multiprocessing.Pool(PROCESSES) as pool:
+        
+        in_args = [(file, file_length, examples, output_path, spectrogram, length, stride, sample_rate) 
+                for (file, file_length), examples in zip(files, num_examples) if not os.path.exists(os.path.join(output_path, os.path.basename(file.replace(".wav", ".npy"))))]
+        
+        jobs = [pool.apply_async(get_spec, in_arg) for in_arg in in_args]
         
         for j in tqdm(jobs):
             j.get()
@@ -127,6 +166,7 @@ class Audioset:
         
         self.egemaps_path = egemaps_path
         self.egemaps_lld_path = egemaps_lld_path
+        self.spec_path = spec_path
         # generate the egemaps features for the 1st time if it does not exist
         if egemaps_lld_path is not None:
             if not os.path.exists(egemaps_lld_path):
@@ -187,8 +227,12 @@ class Audioset:
 
 
         if spec_path is not None:
-            spectrogram = torchaudio.transforms.Spectrogram(hop_length=512)
-            raise NotImplementedError
+            if not os.path.exists(spec_path):
+                os.makedirs(spec_path)
+            if len(glob(os.path.join(spec_path, "*.npy"))) < len(self.files):
+                print("spectrograms do not exist (%d/%d). Generating... This might take a while" % (len(glob(os.path.join(spec_path, "*.npy"))), len(files)))
+                spectrogram = torchaudio.transforms.Spectrogram(hop_length=160)
+                execute_multiprocess_spec(self.files, self.num_examples, spec_path, spectrogram, self.length, self.stride, self.sample_rate)
             # if not os.path.exists(spec_path):
             #     print("specrograms do not exist. Generating... This might take a while")
             #     self.spec = torch.zeros(len(self.clean_set), 201, 938 if self.clean_set[0].shape[-1] == 480000 else 313)

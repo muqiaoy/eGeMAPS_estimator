@@ -11,6 +11,7 @@ results_metrics/
 results_dnsmos/
 weights/
 results/
+conf/*finetune*.yaml
 
 # custom scripts
 misc/

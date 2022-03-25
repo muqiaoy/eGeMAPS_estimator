@@ -232,7 +232,7 @@ class Trainer_est(object):
                 loss = losses.loss
             
             elif self.args.model == 'M5':
-                estimate = self.dmodel(noisy)
+                estimate = self.dmodel(clean)
                 loss = F.mse_loss(estimate, egemaps_func)
             else:
                 raise NotImplementedError

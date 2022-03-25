@@ -80,7 +80,7 @@ def main(args):
         elif args.estimator == 'M5':
             estimator = M5(**args.m5)
         package = torch.load(args.estimatorPath)
-        estimator.load_state_dict(package['state'], strict=False)
+        estimator.load_state_dict(package['state'])
         logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
     else:
         estimator = None
