@@ -116,10 +116,10 @@ class NoisyCleanSet:
         assert len(self.clean_set) == len(self.noisy_set)
 
     def __getitem__(self, index):
-        noisy, _, _ = self.noisy_set[index]
-        clean, egemaps_func, egemaps_lld = self.clean_set[index]
+        noisy, _, _, _ = self.noisy_set[index]
+        clean, egemaps_func, egemaps_lld, spec = self.clean_set[index]
         
-        return noisy, clean, egemaps_func, egemaps_lld
+        return noisy, clean, egemaps_func, egemaps_lld, spec
 
     def __len__(self):
         return len(self.noisy_set)

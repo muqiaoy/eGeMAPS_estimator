@@ -319,7 +319,6 @@ class Trainer(object):
                         estimated_egemaps = self.dmodel.fc(encoded_out)
                     elif isinstance(self.estimator, M5):
                         estimated_egemaps = self.estimator(estimate)
-                        estimated_egemaps = self.dmodel.fc(estimated_egemaps)
                     else:
                         raise NotImplementedError(type(self.estimator))
                     if self.args.egemaps_type == "functionals":

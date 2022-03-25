@@ -160,7 +160,7 @@ def enhance(args, model=None, local_out_dir=None):
         pendings = []
         for data in iterator:
             # Get batch data
-            noisy_signals, _, _, filenames = data
+            noisy_signals, filenames = data
             noisy_signals = noisy_signals.cuda()
             if args.ngpu == 0 and args.num_workers > 1:
                 pendings.append(

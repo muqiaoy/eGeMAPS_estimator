@@ -250,8 +250,6 @@ class Audioset:
             #         "There is a mismatch between the length of the saved spectrograms (%s) and the dataset (%s). You may want to regenerate the features." % (len(self.spec), len(self.clean_set))
 
 
-            self.spec = torch.nn.functional.normalize(self.spec)
-
     def __len__(self):
         return sum(self.num_examples)
 
@@ -296,10 +294,15 @@ class Audioset:
                 egemaps_lld = F.normalize(egemaps_lld)
             else:
                 egemaps_lld = torch.Tensor([-1])
-            if self.with_path:
-                return out, egemaps_func, egemaps_lld, file
+            if self.spec_path is not None:
+                spec = torch.from_numpy(np.load(os.path.join(self.spec_path, os.path.basename(file.replace(".wav", ".npy"))))[index:index+1]).float()
+                spec = F.normalize(spec)
             else:
-                return out, egemaps_func, egemaps_lld
+                spec = torch.Tensor([-1])
+            if self.with_path:
+                return out, file
+            else:
+                return out, egemaps_func, egemaps_lld, spec
 
 
 if __name__ == "__main__":

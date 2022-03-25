@@ -215,8 +215,7 @@ class Trainer_est(object):
             egemaps_func = data[2].squeeze(1).float()
             # egemaps_func = torch.rand(256, 88).cuda()
             if self.args.model == "VAE":
-                raise NotImplementedError
-                spec = data[4]
+                spec = data[4].squeeze(1)
                 spec = spec.transpose(1, 2)
                 estimate = self.dmodel(spec)
                 # apply a loss function after each layer
