@@ -42,13 +42,15 @@ class EgeDecoder(nn.Module):
     @capture_init
     def __init__(self, output_dim):
         super().__init__()
+        if output_dim != 88:
+            raise NotImplementedError
         self.fc = nn.Sequential(
                     SelfAttentionPooling(256),
                     nn.Linear(256, 128),
                     nn.ReLU(),
                     nn.Linear(128, 128),
                     nn.ReLU(),
-                    nn.Linear(128, 88)
+                    nn.Linear(128, output_dim)
                 )
 
     def forward(self, x):
