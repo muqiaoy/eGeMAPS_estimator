@@ -11,9 +11,11 @@ from pathlib import Path
 import os
 import time
 from tqdm import tqdm
+import functools
 
 import torch
 import torch.nn.functional as F
+import torchaudio
 import collections
 
 import os,sys,inspect
@@ -30,12 +32,19 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer_est(object):
-    def __init__(self, data, model, optimizer, args):
+    def __init__(self, data, estimator, decoder, optimizer, args):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
-        self.model = model
-        self.dmodel = distrib.wrap(model)
+        if decoder is None:
+            self.model = estimator
+        else:
+            assert args.model == 'decoder'
+            self.model = decoder
+            self.estimator = estimator
+            window_fn = functools.partial(torch.hann_window, device=args.device)
+            self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
+        self.dmodel = distrib.wrap(self.model)
         self.optimizer = optimizer
 
         # data augment
@@ -232,6 +241,14 @@ class Trainer_est(object):
             
             elif self.args.model == 'M5':
                 estimate = self.dmodel(clean)
+                loss = F.mse_loss(estimate, egemaps_func)
+
+            elif self.args.model == 'decoder':
+                # spec = data[4].squeeze(1)
+                # spec = spec.transpose(1, 2)
+                spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
+                encoded_out = self.estimator(spec).encoder_out.global_sample
+                estimate = self.dmodel(encoded_out)
                 loss = F.mse_loss(estimate, egemaps_func)
             else:
                 raise NotImplementedError

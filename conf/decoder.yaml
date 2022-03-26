@@ -1,28 +1,18 @@
 
 # General arguments
 ngpu: -1
-savePath: "exp/VAE"
+savePath: "exp/decoder"
+estimatorPath: "exp/VAE_pretrained/best.th"
 seed: 2
 
 
 # Model related
-model: VAE
+model: decoder
 vae:
-    # chin: 1
-    # chout: 1
-    # hidden: 64
-    # max_hidden: 10000
-    # causal: true
-    # glu: true
-    # depth: 5
-    # kernel_size: 8
-    # stride: 4
-    # normalize: true
-    # resample: 4
-    # growth: 2
-    # rescale: 0.1
     z_size: 256
     local_z_size: 256
+decoder:
+    output_dim: 88
 
 
 # Data related
@@ -58,23 +48,22 @@ stft_sc_factor: .5
 stft_mag_factor: .5
 
 # Egemaps stuff (ms)
-egemaps_train_path: 
-egemaps_valid_path:
-egemaps_test_path: 
+egemaps_train_path: egemaps_funcs/train
+egemaps_valid_path: egemaps_funcs/valid
+egemaps_test_path: egemaps_funcs/test
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: spec/train
-spec_valid_path: spec/valid
-spec_test_path: spec/test
+spec_train_path: 
+spec_valid_path: 
+spec_test_path: 
 
 
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 

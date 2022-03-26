@@ -20,6 +20,7 @@ import torch.nn as nn
 from model import *
 from model.vae import VAE
 from model.m5 import M5
+from model.egemaps_estimator import SelfAttentionPooling
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer_est import Trainer_est
@@ -51,9 +52,26 @@ def main(args):
 
     if args.model == 'VAE':
         estimator = VAE(**args.vae)
+        decoder = None
 
     elif args.model == 'M5':
         estimator = M5(**args.m5)
+        decoder = None
+    
+    elif args.model == 'decoder':
+        assert args.estimatorPath is not None
+        estimator = VAE(**args.vae)
+        package = torch.load(args.estimatorPath)
+        estimator.load_state_dict(package['state'])
+        logging.info("Loaded checkpoint from %s" % (args.estimatorPath))
+        decoder = nn.Sequential(
+                    SelfAttentionPooling(256),
+                    nn.Linear(256, 128),
+                    nn.ReLU(),
+                    nn.Linear(128, 128),
+                    nn.ReLU(),
+                    nn.Linear(128, 88)
+                ).cuda()
 
     else:
         raise NotImplementedError(args.model)
@@ -83,11 +101,12 @@ def main(args):
         # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
 
     if args.optim == "Adam":
-        optimizer = torch.optim.Adam(estimator.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
+        params = estimator.parameters() if args.model != 'decoder' else decoder.parameters()
+        optimizer = torch.optim.Adam(params, lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
         
-    trainer = Trainer_est(data, estimator, optimizer, args)
+    trainer = Trainer_est(data, estimator, decoder, optimizer, args)
     trainer.train()
 
 
