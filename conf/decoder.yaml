@@ -2,7 +2,7 @@
 # General arguments
 ngpu: -1
 savePath: "exp/decoder"
-estimatorPath: "exp/VAE_pretrained/best.th"
+estimatorPath: "exp/VAE/best.th"
 seed: 2
 
 
@@ -38,7 +38,7 @@ revecho: 0  # add reverb like augment
 # Training related
 batch_size: 256
 epochs: 50
-num_workers: 4
+num_workers: 16
 optim: Adam
 loss: l2
 lr: 1.0e-3
@@ -56,9 +56,9 @@ egemaps_lld_valid_path:
 egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: 
-spec_valid_path: 
-spec_test_path: 
+spec_train_path: spec/train
+spec_valid_path: spec/valid
+spec_test_path: spec/test
 
 
 # Logging and printing, and does not impact training

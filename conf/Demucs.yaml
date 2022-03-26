@@ -3,7 +3,7 @@
 ngpu: -1
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
 estimatorPath: "exp/VAE/best.th"
-savePath: "exp/Demucs_VAE"
+savePath: "exp/Demucs"
 seed: 2
 
 
@@ -56,7 +56,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 100
+batch_size: 16
 epochs: 10
 num_workers: 8
 optim: Adam

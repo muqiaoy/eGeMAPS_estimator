@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 
 from model import *
-from model.egemaps_estimator import SelfAttentionPooling
+from model.decoder import SelfAttentionPooling
 from model.vae import VAE
 from model.m5 import M5
 from dataset import distrib

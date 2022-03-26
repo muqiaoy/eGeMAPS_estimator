@@ -42,10 +42,10 @@ class Trainer_est(object):
             assert args.model == 'decoder'
             self.model = decoder
             self.estimator = estimator
-            window_fn = functools.partial(torch.hann_window, device=args.device)
-            self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
         self.dmodel = distrib.wrap(self.model)
         self.optimizer = optimizer
+        window_fn = functools.partial(torch.hann_window, device=args.device)
+        self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
 
         # data augment
         augments = []
@@ -224,8 +224,9 @@ class Trainer_est(object):
             egemaps_func = data[2].squeeze(1).float()
             # egemaps_func = torch.rand(256, 88).cuda()
             if self.args.model == "VAE":
-                spec = data[4].squeeze(1)
-                spec = spec.transpose(1, 2)
+                # spec = data[4].squeeze(1)
+                # spec = spec.transpose(1, 2)
+                spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
                 estimate = self.dmodel(spec)
                 # apply a loss function after each layer
                     # if self.args.loss == 'l1':

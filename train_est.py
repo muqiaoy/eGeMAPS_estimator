@@ -20,6 +20,7 @@ import torch.nn as nn
 from model import *
 from model.vae import VAE
 from model.m5 import M5
+from model.decoder import EgeDecoder
 from model.egemaps_estimator import SelfAttentionPooling
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
@@ -64,14 +65,8 @@ def main(args):
         package = torch.load(args.estimatorPath)
         estimator.load_state_dict(package['state'])
         logging.info("Loaded checkpoint from %s" % (args.estimatorPath))
-        decoder = nn.Sequential(
-                    SelfAttentionPooling(256),
-                    nn.Linear(256, 128),
-                    nn.ReLU(),
-                    nn.Linear(128, 128),
-                    nn.ReLU(),
-                    nn.Linear(128, 88)
-                ).cuda()
+        decoder = EgeDecoder(**args.decoder).cuda()
+        # decoder = nn.DataParallel(decoder, device_ids=list(range(args.ngpu)))
 
     else:
         raise NotImplementedError(args.model)

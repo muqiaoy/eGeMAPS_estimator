@@ -227,6 +227,7 @@ class Audioset:
 
 
         if spec_path is not None:
+            raise NotImplementedError
             if not os.path.exists(spec_path):
                 os.makedirs(spec_path)
             if len(glob(os.path.join(spec_path, "*.npy"))) < len(self.files):
