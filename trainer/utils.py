@@ -13,6 +13,7 @@ import time
 import sys
 
 import torch
+import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ def capture_init(init):
     return __init__
 
 
-def deserialize_model(package, strict=False):
+def deserialize_model(package, strict=False, ngpu=1):
     """deserialize_model.
     """
     klass = package['class']
@@ -50,7 +51,9 @@ def deserialize_model(package, strict=False):
                 logger.warning("Dropping inexistant parameter %s", key)
                 del kw[key]
         model = klass(*package['args'], **kw)
-    model.load_state_dict(package['state'], strict=False)
+    if ngpu != 0:
+        model = nn.DataParallel(model, device_ids=list(range(ngpu)))
+    model.load_state_dict(package['state'])
     return model
 
 

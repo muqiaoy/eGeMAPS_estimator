@@ -3,6 +3,7 @@
 ngpu: -1
 modelPath: "pretrained/fullsubnet_best_model_58epochs.tar"
 estimatorPath: "exp/VAE/best.th"
+decoderPath: "exp/decoder/best.th"
 savePath: "exp/FullSubNet"
 seed: 2
 
@@ -26,6 +27,8 @@ estimator: VAE
 vae:
     z_size: 256
     local_z_size: 256
+decoder:
+    output_dim: 88
 
 
 # Data related
@@ -34,6 +37,7 @@ trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: 
+singularPath:
 fs: 16000
 segment: 4
 stride: 1    # in seconds, how much to stride between training examples
@@ -88,7 +92,6 @@ spec_test_path:
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 

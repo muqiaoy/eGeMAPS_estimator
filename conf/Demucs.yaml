@@ -3,6 +3,7 @@
 ngpu: -1
 modelPath: "pretrained/dns64-a7761ff99a7d5bb6.th"
 estimatorPath: "exp/VAE/best.th"
+decoderPath: "exp/decoder/best.th"
 savePath: "exp/Demucs"
 seed: 2
 
@@ -31,6 +32,8 @@ estimator: VAE
 vae:
     z_size: 256
     local_z_size: 256
+decoder:
+    output_dim: 88
 
 
 # Data related
@@ -56,9 +59,9 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 100
+batch_size: 120
 epochs: 10
-num_workers: 8
+num_workers: 16
 optim: Adam
 scheduler: false
 loss: l2

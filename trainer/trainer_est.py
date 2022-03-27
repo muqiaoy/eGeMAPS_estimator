@@ -227,6 +227,7 @@ class Trainer_est(object):
                 # spec = data[4].squeeze(1)
                 # spec = spec.transpose(1, 2)
                 spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
+                spec = F.normalize(spec)
                 estimate = self.dmodel(spec)
                 # apply a loss function after each layer
                     # if self.args.loss == 'l1':
@@ -248,6 +249,7 @@ class Trainer_est(object):
                 # spec = data[4].squeeze(1)
                 # spec = spec.transpose(1, 2)
                 spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
+                spec = F.normalize(spec)
                 encoded_out = self.estimator(spec).encoder_out.global_sample
                 estimate = self.dmodel(encoded_out)
                 loss = F.mse_loss(estimate, egemaps_func)

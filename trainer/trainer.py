@@ -36,13 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
-    def __init__(self, data, model, estimator, optimizer, args, scheduler=None):
+    def __init__(self, data, model, estimator, decoder, optimizer, args, scheduler=None):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
         self.model = model
         self.dmodel = distrib.wrap(model)
         self.estimator = estimator
+        self.decoder = decoder
         # if self.estimator is not None:
         #     self.estimator.eval()
         self.optimizer = optimizer
@@ -315,8 +316,10 @@ class Trainer(object):
                 if self.estimator is not None:
                     if isinstance(self.estimator, VAE):
                         input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
+                        # input_spec = F.normalize(input_spec)
                         encoded_out = self.estimator(input_spec).encoder_out.global_sample
-                        estimated_egemaps = self.dmodel.fc(encoded_out)
+                        # estimated_egemaps = self.dmodel.fc(encoded_out)
+                        estimated_egemaps = self.decoder(encoded_out)
                     elif isinstance(self.estimator, M5):
                         estimated_egemaps = self.estimator(estimate)
                     else:

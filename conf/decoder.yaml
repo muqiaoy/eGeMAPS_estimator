@@ -36,7 +36,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 256
+batch_size: 512
 epochs: 50
 num_workers: 16
 optim: Adam
@@ -56,9 +56,9 @@ egemaps_lld_valid_path:
 egemaps_lld_test_path: 
 
 # Spec stuff
-spec_train_path: spec/train
-spec_valid_path: spec/valid
-spec_test_path: spec/test
+spec_train_path: 
+spec_valid_path: 
+spec_test_path: 
 
 
 # Logging and printing, and does not impact training

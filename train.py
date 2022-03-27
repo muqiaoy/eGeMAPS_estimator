@@ -22,6 +22,7 @@ from model import *
 from model.decoder import SelfAttentionPooling
 from model.vae import VAE
 from model.m5 import M5
+from model.decoder import EgeDecoder
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer import Trainer
@@ -77,13 +78,20 @@ def main(args):
     if args.estimatorPath is not None:
         if args.estimator == 'VAE':
             estimator = VAE(**args.vae)
+            decoder = EgeDecoder(**args.decoder)
+            package = torch.load(args.decoderPath)
+            decoder.load_state_dict(package['state'])
         elif args.estimator == 'M5':
             estimator = M5(**args.m5)
+            decoder = None
+        else:
+            raise NotImplementedError
         package = torch.load(args.estimatorPath)
         estimator.load_state_dict(package['state'])
         logging.info("Loaded checkpoint from %s and %s" % (args.modelPath, args.estimatorPath))
     else:
         estimator = None
+        decoder = None
         logging.info("Loaded checkpoint from %s" % (args.modelPath))
         
     length = int(args.segment * args.fs)
@@ -111,34 +119,38 @@ def main(args):
         model = nn.DataParallel(model, device_ids=list(range(args.ngpu)))
         if estimator is not None:
             if args.egemaps_type == 'lld':
-                model.fc = nn.Sequential(
-                        nn.Conv1d(256, 1024, kernel_size=3),
-                        nn.BatchNorm1d(1024),
-                        nn.ReLU(),
-                        nn.Conv1d(1024, 2048, kernel_size=3),
-                        nn.BatchNorm1d(2048),
-                        nn.ReLU(),
-                        nn.Conv1d(2048, 2996, kernel_size=3),
-                        nn.BatchNorm1d(2996),
-                        nn.ReLU(),
-                        nn.Linear(932, 128),
-                        nn.ReLU(),
-                        nn.Linear(128, 25)).cuda()
-            elif args.egemaps_type == 'functionals':
-                model.fc = nn.Sequential(
-                        SelfAttentionPooling(256),
-                        nn.Linear(256, 128),
-                        nn.ReLU(),
-                        nn.Linear(128, 128),
-                        nn.ReLU(),
-                        nn.Linear(128, 88)
-                        ).cuda()
-            else:
                 raise NotImplementedError
+            decoder.cuda()
+            # if args.egemaps_type == 'lld':
+            #     model.fc = nn.Sequential(
+            #             nn.Conv1d(256, 1024, kernel_size=3),
+            #             nn.BatchNorm1d(1024),
+            #             nn.ReLU(),
+            #             nn.Conv1d(1024, 2048, kernel_size=3),
+            #             nn.BatchNorm1d(2048),
+            #             nn.ReLU(),
+            #             nn.Conv1d(2048, 2996, kernel_size=3),
+            #             nn.BatchNorm1d(2996),
+            #             nn.ReLU(),
+            #             nn.Linear(932, 128),
+            #             nn.ReLU(),
+            #             nn.Linear(128, 25)).cuda()
+            # elif args.egemaps_type == 'functionals':
+            #     model.fc = nn.Sequential(
+            #             SelfAttentionPooling(256),
+            #             nn.Linear(256, 128),
+            #             nn.ReLU(),
+            #             nn.Linear(128, 128),
+            #             nn.ReLU(),
+            #             nn.Linear(128, 88)
+            #             ).cuda()
+            # else:
+            #     raise NotImplementedError
             estimator.cuda()
             # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
         else:
             estimator = None
+            decoder = None
 
     if args.optim == "Adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
@@ -149,7 +161,7 @@ def main(args):
     else:
         scheduler = None
         
-    trainer = Trainer(data, model, estimator, optimizer, args, scheduler)
+    trainer = Trainer(data, model, estimator, decoder, optimizer, args, scheduler)
     trainer.train()
 
 
