@@ -22,6 +22,7 @@ fullsubnet:
     weight_init: false
     norm_type: "offline_laplace_norm"
     num_groups_in_drop_band: 2
+estimator: VAE
 vae:
     z_size: 256
     local_z_size: 256
@@ -32,9 +33,10 @@ dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
-weightPath: "weights/dns_train_normalized_fun_ege_diff_weights_raw.npy"
+weightPath: "weights/W_norm_fun_diff_svd.npy"
+singularPath: "weights/U_norm_fun_diff-svd_lsv.npy"
 fs: 16000
-segment: 30
+segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
@@ -49,7 +51,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 4
+batch_size: 24
 epochs: 10
 num_workers: 4
 optim: Adam
@@ -64,10 +66,10 @@ stft_mag_factor: .5
 # Egemaps stuff
 egemaps_type: functionals
 egeloss_only: false
-egemaps_factor: 10.
-egemaps_train_path: egemaps_functionals/train1.npy
-egemaps_valid_path: egemaps_functionals/valid1.npy
-egemaps_test_path: egemaps_functionals/test1.npy
+egemaps_factor: 1.
+egemaps_train_path: egemaps_funcs/train
+egemaps_valid_path: egemaps_funcs/valid
+egemaps_test_path: egemaps_funcs/test
 # egemaps_lld_train_path: egemaps_lld/train1.npy
 # egemaps_lld_valid_path: egemaps_lld/valid1.npy
 # egemaps_lld_test_path: egemaps_lld/test1.npy
@@ -87,7 +89,6 @@ spec_test_path:
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 

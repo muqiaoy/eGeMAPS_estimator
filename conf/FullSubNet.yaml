@@ -3,6 +3,7 @@
 ngpu: -1
 modelPath: "pretrained/fullsubnet_best_model_58epochs.tar"
 estimatorPath: "exp/VAE/best.th"
+decoderPath: "exp/decoder/best.th"
 savePath: "exp/FullSubNet"
 seed: 2
 
@@ -22,9 +23,12 @@ fullsubnet:
     weight_init: false
     norm_type: "offline_laplace_norm"
     num_groups_in_drop_band: 2
+estimator: VAE
 vae:
     z_size: 256
     local_z_size: 256
+decoder:
+    output_dim: 88
 
 
 # Data related
@@ -33,8 +37,9 @@ trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
 weightPath: 
+singularPath:
 fs: 16000
-segment: 30
+segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
@@ -49,7 +54,7 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 4
+batch_size: 24
 epochs: 10
 num_workers: 4
 optim: Adam
@@ -65,9 +70,9 @@ stft_mag_factor: .5
 egemaps_type: functionals
 egeloss_only: False
 egemaps_factor: 1.
-egemaps_train_path: egemaps_functionals/train_joseph.npy
-egemaps_valid_path: egemaps_functionals/valid_joseph.npy
-egemaps_test_path: egemaps_functionals/test_joseph.npy
+egemaps_train_path: egemaps_funcs/train
+egemaps_valid_path: egemaps_funcs/valid
+egemaps_test_path: egemaps_funcs/test
 # egemaps_lld_train_path: egemaps_lld/train_joseph.npy
 # egemaps_lld_valid_path: egemaps_lld/valid_joseph.npy
 # egemaps_lld_test_path: egemaps_lld/test_joseph.npy
@@ -87,7 +92,6 @@ spec_test_path:
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 

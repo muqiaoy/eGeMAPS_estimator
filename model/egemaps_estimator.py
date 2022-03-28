@@ -62,7 +62,7 @@ class SelfAttentionPooling(nn.Module):
             utter_rep: size (N, H)
         """
         softmax = nn.functional.softmax
-        att_w = softmax(self.W(batch_rep).squeeze(-1)).unsqueeze(-1)
+        att_w = softmax(self.W(batch_rep).squeeze(-1), dim=-1).unsqueeze(-1)
         utter_rep = torch.sum(batch_rep * att_w, dim=1)
 
         return utter_rep

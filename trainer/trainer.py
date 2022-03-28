@@ -29,18 +29,21 @@ from .stft_loss import MultiResolutionSTFTLoss
 from .utils import bold, copy_state, pull_metric, serialize_model, swap_state, LogProgress
 from model.FullSubNet.mask import build_complex_ideal_ratio_mask, decompress_cIRM
 from model.FullSubNet.feature import drop_band
+from model.vae import VAE
+from model.m5 import M5
 
 logger = logging.getLogger(__name__)
 
 
 class Trainer(object):
-    def __init__(self, data, model, estimator, optimizer, args, scheduler=None):
+    def __init__(self, data, model, estimator, decoder, optimizer, args, scheduler=None):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
         self.model = model
         self.dmodel = distrib.wrap(model)
         self.estimator = estimator
+        self.decoder = decoder
         # if self.estimator is not None:
         #     self.estimator.eval()
         self.optimizer = optimizer
@@ -83,9 +86,13 @@ class Trainer(object):
                                                   factor_mag=args.stft_mag_factor).to(self.device)
         if args.weightPath is not None:
             self.weight = torch.from_numpy(np.load(args.weightPath)).float().cuda()
-            self.weight = torch.nn.functional.normalize(self.weight, dim=0)
+            # self.weight = torch.nn.functional.normalize(self.weight, dim=0)
         else:
             self.weight = None
+        if args.singularPath is not None:
+            self.U = torch.from_numpy(np.load(args.singularPath)).float().cuda()
+        else:
+            self.U = None
         window_fn = functools.partial(torch.hann_window, device=self.args.device)
         self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
         self._reset()
@@ -153,14 +160,15 @@ class Trainer(object):
             info = " ".join(f"{k.capitalize()}={v:.5f}" for k, v in metrics.items())
             logger.info(f"Epoch {epoch + 1}: {info}")
 
-        logger.info('Enhance and save samples...')
-        out_dir = os.path.join(self.args.savePath, "0")
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
-        enhance(self.args, self.model, out_dir)
+        # logger.info('Enhance and save samples...')
+        # out_dir = os.path.join(self.args.savePath, "0")
+        # if not os.path.exists(out_dir):
+        #     os.makedirs(out_dir)
+        # enhance(self.args, self.model, out_dir)
 
         for epoch in range(len(self.history), self.epochs):
             # Train one epoch
+            print("Epoch %d" % epoch)
             self.model.train()
             if self.estimator is not None:
                 self.estimator.train()
@@ -237,8 +245,7 @@ class Trainer(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
 
-        i = 0  # step
-        for data in tqdm(data_loader):
+        for i, data in tqdm(enumerate(logprog), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
             noisy = data[0]
             clean = data[1]
@@ -303,25 +310,35 @@ class Trainer(object):
             else:
                 raise NotImplementedError
 
-            input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
 
                 
             with torch.autograd.set_detect_anomaly(True):
                 if self.estimator is not None:
-                    encoded_out = self.estimator(input_spec).encoder_out.global_sample
-                    estimated_egemaps = self.dmodel.fc(encoded_out)
+                    if isinstance(self.estimator, VAE):
+                        input_spec = self.spectrogram(estimate).squeeze(dim=1).transpose(1, 2)
+                        # input_spec = F.normalize(input_spec)
+                        encoded_out = self.estimator(input_spec).encoder_out.global_sample
+                        # estimated_egemaps = self.dmodel.fc(encoded_out)
+                        estimated_egemaps = self.decoder(encoded_out)
+                    elif isinstance(self.estimator, M5):
+                        estimated_egemaps = self.estimator(estimate)
+                    else:
+                        raise NotImplementedError(type(self.estimator))
                     if self.args.egemaps_type == "functionals":
                         egemaps_func = data[2]
-                        true_egemaps = egemaps_func
-                        if self.weight is not None:
+                        true_egemaps = egemaps_func.squeeze(1)
+                        if self.weight is not None and self.U is not None:
                             # egemaps_loss = torch.mean((estimated_egemaps @ self.weight[88:, -1] + egemaps_func @ self.weight[:88, -1]).abs())
-                            egemaps_loss = torch.norm( (estimated_egemaps - egemaps_func) @ self.weight[:, -1])
+                            egemaps_loss = torch.norm( (estimated_egemaps - true_egemaps) @ self.U @ self.weight[:, -2])
                         else:
-                            egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_func)
+                            egemaps_loss = F.mse_loss(estimated_egemaps, true_egemaps)
 
                     elif self.args.egemaps_type == "lld":
-                        # egemaps_lld = data[4]
+                        # egemaps_lld = data[3]
+                        raise NotImplementedError
                         egemaps_loss = F.mse_loss(estimated_egemaps, egemaps_lld)
+                    else:
+                        raise NotImplementedError
                     if not self.args.egeloss_only:
                         loss += self.args.egemaps_factor * egemaps_loss
                     else:
@@ -339,7 +356,6 @@ class Trainer(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss
-            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 

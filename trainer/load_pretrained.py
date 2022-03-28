@@ -71,9 +71,9 @@ def get_model(args):
         if 'model' in pkg:
             if 'best_state' in pkg:
                 pkg['model']['state'] = pkg['best_state']
-            model = deserialize_model(pkg['model'])
+            model = deserialize_model(pkg['model'], args.ngpu)
         else:
-            model = deserialize_model(pkg)
+            model = deserialize_model(pkg, args.ngpu)
     elif args.dns64:
         logger.info("Loading pre-trained real time H=64 model trained on DNS.")
         model = dns64()

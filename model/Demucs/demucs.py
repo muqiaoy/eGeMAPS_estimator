@@ -178,6 +178,7 @@ class Demucs(nn.Module):
             skips.append(x)
         encoded_out = x
         x = x.permute(2, 0, 1)
+        self.lstm.lstm.flatten_parameters()
         x, _ = self.lstm(x)
         x = x.permute(1, 2, 0)
         for decode in self.decoder:

@@ -7,8 +7,6 @@ import numpy as np
 import torch
 import torchaudio
 import torch.nn as nn
-from torchaudio.pipelines import Wav2Vec2Bundle
-# import opensmile
 from .Demucs.utils import capture_init
 
 from . import modules as custom_nn
@@ -33,18 +31,10 @@ class VAE(nn.Module):
     
     def forward(self, input, annealing=0):
         
-        # print(input.shape)
         encoder_out = self.encoder(input)
-        # print(encoder_out.local_dist)
-        # print(encoder_out.local_sample.shape)
-        # print(encoder_out.global_dist)
-        # print(encoder_out.global_sample.shape)
         predictor_out = self.predictor(input, encoder_out.local_sample)
-        # print(predictor_out)
         
         decoder_out = self.decoder(encoder_out.local_sample)
-        # print(decoder_out.shape)
-        # assert False
         assert torch.min(decoder_out) >= 0.
         assert torch.max(decoder_out) <= 1.
         

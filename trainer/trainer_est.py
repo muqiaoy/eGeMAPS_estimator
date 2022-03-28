@@ -11,9 +11,11 @@ from pathlib import Path
 import os
 import time
 from tqdm import tqdm
+import functools
 
 import torch
 import torch.nn.functional as F
+import torchaudio
 import collections
 
 import os,sys,inspect
@@ -30,13 +32,20 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer_est(object):
-    def __init__(self, data, model, optimizer, args):
+    def __init__(self, data, estimator, decoder, optimizer, args):
         self.tr_loader = data['tr_loader']
         self.cv_loader = data['cv_loader']
         self.tt_loader = data['tt_loader']
-        self.model = model
-        self.dmodel = distrib.wrap(model)
+        if decoder is None:
+            self.model = estimator
+        else:
+            assert args.model == 'decoder'
+            self.model = decoder
+            self.estimator = estimator
+        self.dmodel = distrib.wrap(self.model)
         self.optimizer = optimizer
+        window_fn = functools.partial(torch.hann_window, device=args.device)
+        self.spectrogram = torchaudio.transforms.Spectrogram(hop_length=512, window_fn=window_fn)
 
         # data augment
         augments = []
@@ -77,7 +86,10 @@ class Trainer_est(object):
 
     def _serialize(self):
         package = {}
-        package['model'] = serialize_model(self.model)
+        if isinstance(self.model, torch.nn.DataParallel):
+            package['model'] = serialize_model(self.model.module)
+        else:
+            package['model'] = serialize_model(self.model)
         package['optimizer'] = self.optimizer.state_dict()
         package['history'] = self.history
         package['best_state'] = self.best_state
@@ -205,30 +217,47 @@ class Trainer_est(object):
         name = label + f" | Epoch {epoch + 1}"
         logprog = LogProgress(logger, data_loader, updates=self.num_prints, name=name)
         
-        i = 0  # step
-        for data in tqdm(data_loader):
+        for i, data in tqdm(enumerate(logprog), total=len(data_loader)):
             data = [x.to(self.device) for x in data]
+            noisy = data[0]
             clean = data[1]
-            egemaps = data[2]
-            spec = data[3]
-            spec = spec.transpose(1, 2)
-            estimate = self.dmodel(spec)
-            # apply a loss function after each layer
-            with torch.autograd.set_detect_anomaly(True):
-                # if self.args.loss == 'l1':
-                #     loss = F.l1_loss(egemaps, estimate)
-                # elif self.args.loss == 'l2':
-                #     loss = F.mse_loss(egemaps, estimate)
-                # elif self.args.loss == 'huber':
-                #     loss = F.smooth_l1_loss(egemaps, estimate)
-                # else:
-                #     raise ValueError(f"Invalid loss {self.args.loss}")
+            egemaps_func = data[2].squeeze(1).float()
+            # egemaps_func = torch.rand(256, 88).cuda()
+            if self.args.model == "VAE":
+                # spec = data[4].squeeze(1)
+                # spec = spec.transpose(1, 2)
+                spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
+                spec = F.normalize(spec)
+                estimate = self.dmodel(spec)
+                # apply a loss function after each layer
+                    # if self.args.loss == 'l1':
+                    #     loss = F.l1_loss(egemaps, estimate)
+                    # elif self.args.loss == 'l2':
+                    #     loss = F.mse_loss(egemaps, estimate)
+                    # elif self.args.loss == 'huber':
+                    #     loss = F.smooth_l1_loss(egemaps, estimate)
+                    # else:
+                    #     raise ValueError(f"Invalid loss {self.args.loss}")
                 losses = self.mi_loss(spec, estimate, beta_kl=1., beta_mi=1.)
                 loss = losses.loss
+            
+            elif self.args.model == 'M5':
+                estimate = self.dmodel(clean)
+                loss = F.mse_loss(estimate, egemaps_func)
 
-                # MultiResolution STFT loss
+            elif self.args.model == 'decoder':
+                # spec = data[4].squeeze(1)
+                # spec = spec.transpose(1, 2)
+                spec = self.spectrogram(clean).squeeze(dim=1).transpose(1, 2)
+                spec = F.normalize(spec)
+                encoded_out = self.estimator(spec).encoder_out.global_sample
+                estimate = self.dmodel(encoded_out)
+                loss = F.mse_loss(estimate, egemaps_func)
+            else:
+                raise NotImplementedError
 
-                # optimize model in training mode
+            # optimize model in training mode
+            with torch.autograd.set_detect_anomaly(True):
                 if label == 'Train':
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -238,7 +267,6 @@ class Trainer_est(object):
             logprog.update(loss=format(total_loss / (i + 1), ".5f"))
             # Just in case, clear some memory
             del loss, estimate
-            i += 1
         return distrib.average([total_loss / (i + 1)], i + 1)[0]
 
 

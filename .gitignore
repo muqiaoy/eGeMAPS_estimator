@@ -2,15 +2,17 @@
 pretrained/
 exp/
 s3prl/
-egemaps_functionals/
-egemaps_lld/
+egemaps_funcs/
+egemaps_llds/
 spec/
-spec_librosa/
+spec_hop512/
+spec_30s/
 enhanced_audios/
 results_metrics/
 results_dnsmos/
 weights/
 results/
+conf/*finetune*.yaml
 
 # custom scripts
 misc/

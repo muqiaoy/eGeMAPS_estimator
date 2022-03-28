@@ -15,9 +15,13 @@ from pathlib import Path
 import shutil
 
 import torch
+import torch.nn as nn
 
 from model import *
 from model.vae import VAE
+from model.m5 import M5
+from model.decoder import EgeDecoder
+from model.egemaps_estimator import SelfAttentionPooling
 from dataset import distrib
 from dataset.dataset import NoisyCleanSet
 from trainer.trainer_est import Trainer_est
@@ -49,42 +53,55 @@ def main(args):
 
     if args.model == 'VAE':
         estimator = VAE(**args.vae)
+        decoder = None
+
+    elif args.model == 'M5':
+        estimator = M5(**args.m5)
+        decoder = None
+    
+    elif args.model == 'decoder':
+        assert args.estimatorPath is not None
+        estimator = VAE(**args.vae)
+        package = torch.load(args.estimatorPath)
+        estimator.load_state_dict(package['state'])
+        logging.info("Loaded checkpoint from %s" % (args.estimatorPath))
+        decoder = EgeDecoder(**args.decoder).cuda()
+        # decoder = nn.DataParallel(decoder, device_ids=list(range(args.ngpu)))
 
     else:
         raise NotImplementedError(args.model)
         
     length = int(args.segment * args.fs)
     stride = int(args.stride * args.fs)
-    tr_noisy_dir = os.path.join(args.dataPath, args.trainPath, "noisy")
-    tr_clean_dir = os.path.join(args.dataPath, args.trainPath, "clean")
-    tr_dataset = NoisyCleanSet(tr_noisy_dir, tr_clean_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, spec_path=args.spec_train_path)
+    tr_dir = os.path.join(args.dataPath, args.trainPath)
+    tr_dataset = NoisyCleanSet(tr_dir, num_files=args.num_train_files, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_train_path, egemaps_lld_path=args.egemaps_lld_train_path, spec_path=args.spec_train_path)
     tr_loader = distrib.loader(
         tr_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     print("Total number of train files: %s" % len(tr_dataset))
-    cv_noisy_dir = os.path.join(args.dataPath, args.validPath, "noisy")
-    cv_clean_dir = os.path.join(args.dataPath, args.validPath, "clean")
-    cv_dataset = NoisyCleanSet(cv_noisy_dir, cv_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, spec_path=args.spec_valid_path)
+    cv_dir = os.path.join(args.dataPath, args.validPath)
+    cv_dataset = NoisyCleanSet(cv_dir, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_valid_path, egemaps_lld_path=args.egemaps_lld_valid_path, spec_path=args.spec_valid_path)
     cv_loader = distrib.loader(
-        cv_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+        cv_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
     print("Total number of valid files: %s" % len(cv_dataset))
-    tt_noisy_dir = os.path.join(args.dataPath, args.testPath, "noisy")
-    tt_clean_dir = os.path.join(args.dataPath, args.testPath, "clean")
-    tt_dataset = NoisyCleanSet(tt_noisy_dir, tt_clean_dir, length=length, stride=stride, pad=args.pad, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, spec_path=args.spec_test_path)
+    tt_dir = os.path.join(args.dataPath, args.testPath)
+    tt_dataset = NoisyCleanSet(tt_dir, matching=args.matching, sample_rate=args.fs, egemaps_path=args.egemaps_test_path, egemaps_lld_path=args.egemaps_lld_test_path, spec_path=args.spec_test_path)
     tt_loader = distrib.loader(
-        tt_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+        tt_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
     print("Total number of test files: %s" % len(tt_dataset))
 
     data = {"tr_loader": tr_loader, "cv_loader": cv_loader, "tt_loader": tt_loader}
 
     if torch.cuda.is_available():
         estimator.cuda()
+        # estimator = nn.DataParallel(estimator, device_ids=list(range(args.ngpu)))
 
     if args.optim == "Adam":
-        optimizer = torch.optim.Adam(estimator.parameters(), lr=float(args.lr), betas=(0.9, args.beta2))
+        params = estimator.parameters() if args.model != 'decoder' else decoder.parameters()
+        optimizer = torch.optim.Adam(params, lr=float(args.lr), betas=(0.9, args.beta2))
     else:
         raise NotImplementedError
         
-    trainer = Trainer_est(data, estimator, optimizer, args)
+    trainer = Trainer_est(data, estimator, decoder, optimizer, args)
     trainer.train()
 
 

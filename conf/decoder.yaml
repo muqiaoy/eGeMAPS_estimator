@@ -1,44 +1,18 @@
 
 # General arguments
 ngpu: -1
-modelPath: "pretrained/ConvTasNet.pth"
+savePath: "exp/decoder"
 estimatorPath: "exp/VAE/best.th"
-savePath: "exp/ConvTasNet"
 seed: 2
 
 
 # Model related
-model: ConvTasNet
-convtasnet:
-    encoder_conf:
-        channel: 256
-        kernel_size: 20
-        stride: 10
-    decoder_conf:
-        channel: 256
-        kernel_size: 20
-        stride: 10
-    separator_conf:
-        input_dim: 256
-        num_spk: 1
-        layer: 8
-        stack: 4
-        bottleneck_dim: 256
-        hidden_dim: 512
-        kernel: 3
-        causal: False
-        norm_type: "gLN"
-        nonlinear: relu
-    criterions:
-        conf:
-            eps: 1.0e-7
-        wrapper: pit
-        wrapper_conf:
-            weight: 1.0
-            independent_perm: True
+model: decoder
 vae:
     z_size: 256
     local_z_size: 256
+decoder:
+    output_dim: 88
 
 
 # Data related
@@ -46,13 +20,12 @@ dataPath: "/home/muqiaoy/Datasets/DNS-Challenge/datasets"
 trainPath: "synthesized_joseph"
 validPath: "synthesized_valid"
 testPath: "test_set/synthetic/no_reverb"
-weightPath: 
 fs: 16000
 segment: 4
 stride: 1    # in seconds, how much to stride between training examples
 pad: true   # if training sample is too short, pad it
 matching: dns
-num_train_files:
+num_train_files: 
 
 # Data augmentation
 remix: false   # remix noise and clean
@@ -63,36 +36,26 @@ revecho: 0  # add reverb like augment
 
 
 # Training related
-batch_size: 8
-epochs: 10
-num_workers: 4
+batch_size: 512
+epochs: 50
+num_workers: 16
 optim: Adam
-scheduler: false
 loss: l2
-lr: 1.0e-5
+lr: 1.0e-3
 beta2: 0.999
-stft_loss: false
+stft_loss: False
 stft_sc_factor: .5
 stft_mag_factor: .5
 
-# Egemaps stuff
-egemaps_type: functionals
-egeloss_only: false
-egemaps_factor: 1.
-egemaps_train_path: egemaps_functionals/train_joseph.npy
-egemaps_valid_path: egemaps_functionals/valid_joseph.npy
-egemaps_test_path: egemaps_functionals/test_joseph.npy
-# egemaps_lld_train_path: egemaps_lld/train_joseph.npy
-# egemaps_lld_valid_path: egemaps_lld/valid_joseph.npy
-# egemaps_lld_test_path: egemaps_lld/test_joseph.npy
+# Egemaps stuff (ms)
+egemaps_train_path: egemaps_funcs/train
+egemaps_valid_path: egemaps_funcs/valid
+egemaps_test_path: egemaps_funcs/test
 egemaps_lld_train_path: 
 egemaps_lld_valid_path: 
 egemaps_lld_test_path: 
 
 # Spec stuff
-# spec_train_path: spec/train_joseph.npy
-# spec_valid_path: spec/valid_joseph.npy
-# spec_test_path: spec/test_joseph.npy
 spec_train_path: 
 spec_valid_path: 
 spec_test_path: 
@@ -101,7 +64,6 @@ spec_test_path:
 # Logging and printing, and does not impact training
 num_prints: 5
 device: cuda
-num_workers: 5
 verbose: 0
 show: 0   # just show the model and its size and exit
 
@@ -115,13 +77,14 @@ continue_pretrained:   # use either dns48, dns64 or master64 to fine tune from p
 restart: false # Ignore existing checkpoints
 checkpoint_file: checkpoint.th
 best_file: best.th  # will contain only best model at any point
+best_est_file: best_est.th
 history_file: history.json
 samples_dir: samples
 save_again: false  # if true, only load checkpoint and save again, useful to reexport best.th
 
 
 # Evaluation stuff
-pesq: false # compute pesq?
-eval_every: 1  # compute test metrics every so epochs
+pesq: True # compute pesq?
+eval_every: 10  # compute test metrics every so epochs
 dry: 0.  # dry/wet knob value at eval
-streaming: false  # use streaming evaluation for Demucs
+streaming: False  # use streaming evaluation for Demucs
