@@ -1,6 +1,8 @@
 # eGeMAPS_estimator
 
-To be present at Interspeech 2022. 
+To be present at Interspeech 2022.
+
+Title: Improving Speech Enhancement through Fine-Grained Speech Characteristics
 
 Arxiv: https://arxiv.org/abs/2207.00237
 
