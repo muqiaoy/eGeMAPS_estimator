@@ -1,5 +1,9 @@
 # eGeMAPS_estimator
 
+To be present at Interspeech 2022. 
+
+Arxiv: https://arxiv.org/abs/2207.00237
+
 ## Prerequisites
 ```
 pip install -r requirements.txt
